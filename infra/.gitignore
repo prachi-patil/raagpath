@@ -1,0 +1,17 @@
+# Secrets — never commit
+terraform.tfvars
+*.tfvars.json
+
+# Terraform working directory
+.terraform/
+
+# State files — move to S3 backend before working in a team
+terraform.tfstate
+terraform.tfstate.backup
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Lock file IS committed — ensures everyone uses the same provider versions
+# .terraform.lock.hcl  <-- do NOT ignore this

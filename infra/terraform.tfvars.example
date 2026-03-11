@@ -1,0 +1,9 @@
+# Copy this file to terraform.tfvars and fill in real values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region       = "ap-south-1"
+project          = "raagpath"
+key_name         = "raagpath-key"          # name of key pair in AWS console
+allowed_ssh_cidr = "122.170.248.115/32"    # e.g. 49.36.12.5/32  (find yours at checkip.amazonaws.com)
+db_username      = "raagpath"
+db_password      = "raagpath"

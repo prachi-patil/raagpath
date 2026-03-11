@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Next.js Frontend",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": ["C:\\ClaudeWorkspace\\Raag\\frontend\\node_modules\\next\\dist\\bin\\next", "dev"],
+      "port": 3000,
+      "cwd": "C:\\ClaudeWorkspace\\Raag\\frontend"
+    },
+    {
+      "name": "Spring Boot Backend",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["bootRun"],
+      "port": 8080
+    }
+  ]
+}
