@@ -1,0 +1,57 @@
+# ═══════════════════════════════════════════════════════════════════
+#  RaagPath — Docker Compose (EC2 production)
+#
+#  Usage on EC2:
+#    cp .env.example .env        # fill in secrets
+#    docker compose up -d
+#
+#  Services:
+#    app   — Spring Boot + Next.js static (port 8080)
+#    redis — Redis 7 (port 6379, internal only)
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: raagpath-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - raagpath-net
+
+  # ── Spring Boot App ────────────────────────────────────────────────────────
+  app:
+    image: public.ecr.aws/v8m0u4l8/raagpath:latest
+    container_name: raagpath-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL:      ${SPRING_DATASOURCE_URL}
+      DB_USERNAME:                ${DB_USERNAME}
+      DB_PASSWORD:                ${DB_PASSWORD}
+      JWT_SECRET:                 ${JWT_SECRET}
+      REDIS_HOST:                 redis
+      REDIS_PORT:                 6379
+      SPRING_PROFILES_ACTIVE:     prod
+    depends_on:
+      - redis
+    networks:
+      - raagpath-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  redis_data:
+
+networks:
+  raagpath-net:
+    driver: bridge

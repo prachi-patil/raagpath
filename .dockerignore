@@ -1,0 +1,31 @@
+# Node (reinstalled fresh inside Docker)
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Gradle cache/build (rebuilt inside Docker)
+backend/.gradle/
+backend/build/
+
+# Terraform state + secrets
+infra/.terraform/
+infra/terraform.tfstate*
+infra/terraform.tfvars
+infra/*.tfvars.json
+infra/crash.log
+
+# Git history (not needed in build context)
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docs
+*.md
+*.html
+
+# SSH keys (never in Docker context)
+*.pem

@@ -1,0 +1,114 @@
+# ═══════════════════════════════════════════════════════════════════
+#  RaagPath — CI/CD Pipeline
+#
+#  Trigger : push to main
+#  Steps   : Build → Docker build → ECR Public push → SSH deploy
+#
+#  Secrets required (GitHub → Settings → Secrets → Actions):
+#    AWS_ROLE_ARN          — OIDC role ARN (no long-lived keys)
+#    EC2_HOST              — EC2 public IP or DNS
+#    EC2_USER              — ec2-user
+#    EC2_SSH_KEY           — PEM private key (contents, not path)
+#    DB_PASSWORD           — RDS password
+#    JWT_SECRET            — 64-char random string
+#    SPRING_DATASOURCE_URL — jdbc:postgresql://...
+# ═══════════════════════════════════════════════════════════════════
+
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+env:
+  ECR_REGISTRY: public.ecr.aws/v8m0u4l8
+  IMAGE_NAME:   raagpath
+  AWS_REGION:   us-east-1   # ECR Public is always us-east-1
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Configure AWS credentials via OIDC ────────────────────────────────
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume:    ${{ secrets.AWS_ROLE_ARN }}
+          aws-region:        ${{ env.AWS_REGION }}
+
+      # ── 3. Log in to ECR Public ──────────────────────────────────────────────
+      - name: Login to Amazon ECR Public
+        id: login-ecr-public
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: public
+
+      # ── 4. Build & push Docker image ─────────────────────────────────────────
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build \
+            -t $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$IMAGE_NAME:latest \
+            .
+          docker push $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$IMAGE_NAME:latest
+
+      # ── 5. Deploy to EC2 via SSH ─────────────────────────────────────────────
+      - name: Deploy to EC2
+        env:
+          IMAGE_TAG:            ${{ github.sha }}
+          DB_PASSWORD:          ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
+        run: |
+          # Write SSH key to temp file
+          echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/raagpath-key.pem
+          chmod 600 /tmp/raagpath-key.pem
+
+          ssh -o StrictHostKeyChecking=no \
+              -i /tmp/raagpath-key.pem \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+              "
+                set -e
+                # Pull latest image
+                aws ecr-public get-login-password --region us-east-1 | \
+                  docker login --username AWS --password-stdin public.ecr.aws
+
+                docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+                # Gracefully stop old container (if running)
+                docker stop raagpath-app 2>/dev/null || true
+                docker rm   raagpath-app 2>/dev/null || true
+
+                # Start new container
+                docker run -d \
+                  --name raagpath-app \
+                  --restart unless-stopped \
+                  -p 8080:8080 \
+                  -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
+                  -e DB_USERNAME=raagpath \
+                  -e DB_PASSWORD='${DB_PASSWORD}' \
+                  -e JWT_SECRET='${JWT_SECRET}' \
+                  -e REDIS_HOST=localhost \
+                  -e REDIS_PORT=6379 \
+                  -e SPRING_PROFILES_ACTIVE=prod \
+                  $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+
+                # Wait for health check
+                sleep 10
+                curl -sf http://localhost:8080/api/health || exit 1
+                echo 'Deployment successful!'
+              "
+
+          rm -f /tmp/raagpath-key.pem
