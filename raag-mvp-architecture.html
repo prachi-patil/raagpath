@@ -1,0 +1,1827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RaagPath MVP — Architecture Design</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=JetBrains+Mono:wght@300;400;600&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --saffron: #E8650A;
+    --deep-saffron: #C4500A;
+    --gold: #D4A017;
+    --gold-light: #F2C849;
+    --ivory: #F5EDD6;
+    --ivory-dark: #EDE0C0;
+    --ink: #1A1208;
+    --ink-mid: #2D200A;
+    --ink-soft: #3D2E12;
+    --rust: #8B3A10;
+    --jade: #1A6B4A;
+    --jade-light: #2A9B6A;
+    --muted: #7A6040;
+    --border: rgba(212,160,23,0.25);
+    --glow: rgba(232,101,10,0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--ink);
+    color: var(--ivory);
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 17px;
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+
+  /* Mandala BG */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -200px; right: -200px;
+    width: 700px; height: 700px;
+    background: radial-gradient(circle, rgba(232,101,10,0.06) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -200px; left: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(26,107,74,0.08) 0%, transparent 60%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .page { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 32px 80px; }
+
+  /* ─── HEADER ─── */
+  header {
+    padding: 64px 0 48px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 64px;
+    position: relative;
+  }
+  .header-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3em;
+    color: var(--saffron);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .header-label::after {
+    content: '';
+    flex: 1;
+    max-width: 60px;
+    height: 1px;
+    background: var(--saffron);
+    opacity: 0.5;
+  }
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(42px, 6vw, 72px);
+    font-weight: 900;
+    line-height: 1.05;
+    color: var(--ivory);
+    letter-spacing: -0.02em;
+  }
+  h1 span { color: var(--saffron); font-style: italic; }
+  .header-sub {
+    margin-top: 16px;
+    font-size: 20px;
+    color: var(--muted);
+    font-style: italic;
+    max-width: 600px;
+  }
+  .header-meta {
+    margin-top: 32px;
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+  .meta-pill {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+  }
+
+  /* ─── SECTION TITLES ─── */
+  .section { margin-bottom: 72px; }
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+  .section-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--saffron);
+    letter-spacing: 0.2em;
+    opacity: 0.7;
+  }
+  h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--ivory);
+    letter-spacing: -0.01em;
+  }
+  h2 em { color: var(--gold); font-style: italic; }
+  h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--gold-light);
+    margin-bottom: 12px;
+  }
+
+  /* ─── ARCH DIAGRAM ─── */
+  .arch-diagram {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .arch-diagram::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--saffron), var(--gold), transparent);
+  }
+
+  .arch-layers {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .arch-layer {
+    display: grid;
+    align-items: stretch;
+    gap: 16px;
+    padding: 20px 0;
+    position: relative;
+  }
+  .arch-layer + .arch-layer::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 10%; right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+  }
+  .layer-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    align-self: center;
+    min-width: 28px;
+  }
+  .layer-boxes {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .arch-box {
+    flex: 1;
+    min-width: 120px;
+    padding: 14px 18px;
+    border-radius: 3px;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+  }
+  .arch-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .arch-box .box-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .arch-box .box-desc {
+    font-size: 12px;
+    line-height: 1.4;
+    opacity: 0.75;
+    font-family: 'Crimson Pro', serif;
+  }
+
+  .box-client { background: rgba(232,101,10,0.12); border: 1px solid rgba(232,101,10,0.3); }
+  .box-client .box-title { color: var(--saffron); }
+  .box-api { background: rgba(212,160,23,0.10); border: 1px solid rgba(212,160,23,0.3); }
+  .box-api .box-title { color: var(--gold-light); }
+  .box-service { background: rgba(26,107,74,0.12); border: 1px solid rgba(26,107,74,0.3); }
+  .box-service .box-title { color: var(--jade-light); }
+  .box-data { background: rgba(139,58,16,0.18); border: 1px solid rgba(139,58,16,0.4); }
+  .box-data .box-title { color: #E8956A; }
+  .box-audio { background: rgba(100,70,160,0.15); border: 1px solid rgba(130,90,200,0.3); }
+  .box-audio .box-title { color: #B89EE8; }
+
+  /* ─── FLOW ARROWS ─── */
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    gap: 20%;
+    padding: 8px 0;
+  }
+  .arrow {
+    font-size: 20px;
+    color: var(--border);
+    line-height: 1;
+  }
+
+  /* ─── FEATURE GRID ─── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+  .feature-card {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .feature-card:hover {
+    border-color: rgba(212,160,23,0.5);
+    background: rgba(255,255,255,0.04);
+  }
+  .feature-card::before {
+    content: attr(data-num);
+    position: absolute;
+    top: 20px; right: 20px;
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--ink-soft);
+    line-height: 1;
+  }
+  .feature-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+    display: block;
+  }
+  .feature-card h3 { color: var(--ivory); font-size: 16px; margin-bottom: 8px; }
+  .feature-card p { font-size: 15px; color: var(--muted); line-height: 1.6; }
+  .feature-tags {
+    margin-top: 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.05em;
+  }
+  .tag-tech { background: rgba(26,107,74,0.2); color: var(--jade-light); border: 1px solid rgba(26,107,74,0.3); }
+  .tag-domain { background: rgba(232,101,10,0.15); color: var(--saffron); border: 1px solid rgba(232,101,10,0.25); }
+  .tag-game { background: rgba(212,160,23,0.12); color: var(--gold); border: 1px solid rgba(212,160,23,0.2); }
+
+  /* ─── DATA SCHEMA ─── */
+  .schema-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .schema-table {
+    background: rgba(26,18,8,0.8);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .schema-header {
+    background: rgba(212,160,23,0.1);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .schema-header span:first-child {
+    font-size: 14px;
+  }
+  .schema-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gold);
+    letter-spacing: 0.05em;
+  }
+  .schema-body { padding: 12px 0; }
+  .schema-field {
+    padding: 5px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    gap: 12px;
+  }
+  .schema-field:hover { background: rgba(255,255,255,0.03); }
+  .field-name { color: var(--ivory); opacity: 0.85; }
+  .field-type { color: var(--saffron); opacity: 0.7; }
+  .field-pk { color: var(--gold); font-weight: 600; }
+  .field-fk { color: var(--jade-light); }
+
+  /* ─── TECH STACK TABLE ─── */
+  .stack-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 15px;
+  }
+  .stack-table th {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 10px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .stack-table td {
+    padding: 13px 16px;
+    border-bottom: 1px solid rgba(212,160,23,0.08);
+    vertical-align: top;
+  }
+  .stack-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .stack-table td:first-child {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+  .stack-table td:nth-child(2) {
+    font-weight: 600;
+    color: var(--gold-light);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .stack-table td:nth-child(3) { color: var(--muted); font-size: 14px; }
+
+  /* ─── USER FLOW ─── */
+  .flow-steps {
+    display: flex;
+    gap: 0;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .flow-step {
+    flex: 1;
+    min-width: 160px;
+    padding: 24px 20px;
+    position: relative;
+    text-align: center;
+  }
+  .flow-step + .flow-step::before {
+    content: '→';
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 18px;
+    color: var(--saffron);
+    opacity: 0.5;
+  }
+  .flow-step-num {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(232,101,10,0.15);
+    border: 1px solid rgba(232,101,10,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--saffron);
+    margin: 0 auto 12px;
+  }
+  .flow-step h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ivory);
+    margin-bottom: 6px;
+  }
+  .flow-step p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ─── GAMIFICATION ─── */
+  .xp-table {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+  }
+  .xp-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 2fr;
+    padding: 12px 20px;
+    border-bottom: 1px solid rgba(212,160,23,0.07);
+    gap: 16px;
+    align-items: center;
+  }
+  .xp-row.header {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    background: rgba(212,160,23,0.05);
+  }
+  .xp-row:last-child { border-bottom: none; }
+  .xp-row:hover:not(.header) { background: rgba(255,255,255,0.02); }
+  .xp-action { color: var(--ivory); }
+  .xp-pts { color: var(--gold); font-weight: 600; }
+  .xp-freq { color: var(--muted); }
+  .xp-note { color: var(--jade-light); font-size: 11px; }
+
+  /* ─── LEVELS ─── */
+  .levels-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .level-badge {
+    flex: 1;
+    min-width: 100px;
+    padding: 16px 12px;
+    border-radius: 3px;
+    text-align: center;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    transition: transform 0.2s;
+  }
+  .level-badge:hover { transform: translateY(-3px); }
+  .level-badge .emoji { font-size: 24px; display: block; margin-bottom: 8px; }
+  .level-badge .title { font-family: 'Playfair Display', serif; font-size: 13px; color: var(--ivory); margin-bottom: 4px; }
+  .level-badge .xp-req { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  /* ─── TIMELINE ─── */
+  .timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 8px; bottom: 8px;
+    width: 1px;
+    background: linear-gradient(to bottom, var(--saffron), var(--jade), transparent);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 32px;
+    padding: 20px 24px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -39px;
+    top: 24px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--saffron);
+    border: 2px solid var(--ink);
+    box-shadow: 0 0 12px rgba(232,101,10,0.5);
+  }
+  .timeline-item:nth-child(2)::before { background: var(--gold); box-shadow: 0 0 12px rgba(212,160,23,0.5); }
+  .timeline-item:nth-child(3)::before { background: var(--jade-light); box-shadow: 0 0 12px rgba(26,107,74,0.5); }
+  .sprint-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--saffron);
+    margin-bottom: 8px;
+  }
+  .timeline-item:nth-child(2) .sprint-label { color: var(--gold); }
+  .timeline-item:nth-child(3) .sprint-label { color: var(--jade-light); }
+  .sprint-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ivory);
+    margin-bottom: 12px;
+  }
+  .sprint-tasks {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .sprint-tasks li {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 2px;
+    color: var(--ivory-dark);
+  }
+
+  /* ─── API ENDPOINTS ─── */
+  .endpoint-list { display: flex; flex-direction: column; gap: 8px; }
+  .endpoint {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    padding: 11px 18px;
+    background: rgba(26,18,8,0.6);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    transition: border-color 0.2s;
+  }
+  .endpoint:hover { border-color: var(--border); }
+  .method {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 2px;
+    min-width: 44px;
+    text-align: center;
+  }
+  .GET { background: rgba(26,107,74,0.3); color: var(--jade-light); }
+  .POST { background: rgba(212,160,23,0.2); color: var(--gold); }
+  .PATCH { background: rgba(100,70,160,0.25); color: #B89EE8; }
+  .endpoint-path { color: var(--ivory); flex: 1; }
+  .endpoint-desc { color: var(--muted); font-size: 11px; flex: 1.5; }
+
+  /* ─── DIVIDER ─── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+    position: relative;
+  }
+  .divider::after {
+    content: '✦';
+    position: absolute;
+    left: 50%;
+    top: -10px;
+    transform: translateX(-50%);
+    background: var(--ink);
+    padding: 0 12px;
+    color: var(--gold);
+    font-size: 12px;
+    opacity: 0.5;
+  }
+
+  /* ─── CALLOUT ─── */
+  .callout {
+    border-left: 3px solid var(--saffron);
+    padding: 16px 24px;
+    background: rgba(232,101,10,0.06);
+    border-radius: 0 3px 3px 0;
+    margin: 24px 0;
+    font-style: italic;
+    color: var(--ivory-dark);
+  }
+  .callout strong { color: var(--saffron); font-style: normal; }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .section { animation: fadeUp 0.5s ease both; }
+  .section:nth-child(2) { animation-delay: 0.05s; }
+  .section:nth-child(3) { animation-delay: 0.1s; }
+  .section:nth-child(4) { animation-delay: 0.15s; }
+  .section:nth-child(5) { animation-delay: 0.2s; }
+
+  @media (max-width: 640px) {
+    .flow-step + .flow-step::before { display: none; }
+    .xp-row { grid-template-columns: 1fr 1fr; }
+    .xp-note { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-label">Architecture Document <span></span> MVP v3.2 — ECR Public Registry</div>
+    <h1>RaagPath<br><span>Deep Dive</span></h1>
+    <p class="header-sub">Java 21 + Next.js bundled in one Tomcat image · ECR Public · GitHub Actions CI/CD · AWS Free Tier</p>
+    <div class="header-meta">
+      <div class="meta-pill">Stack: React + Java 21</div>
+      <div class="meta-pill">Scope: 11–13 Weeks</div>
+      <div class="meta-pill">Infra: AWS Free Tier</div>
+      <div class="meta-pill">Container: Docker + K8s</div>
+      <div class="meta-pill">Registry: ECR Public</div>
+      <div class="meta-pill">Updated: v3.2</div>
+    </div>
+  </header>
+
+  <!-- 1. SYSTEM ARCHITECTURE -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">01 —</span>
+      <h2>System <em>Architecture</em></h2>
+    </div>
+
+    <div class="arch-diagram">
+      <div class="arch-layers">
+
+        <!-- Client Layer -->
+        <div class="arch-layer" style="grid-template-columns: 60px 1fr;">
+          <span class="layer-label">Client</span>
+          <div class="layer-boxes">
+            <div class="arch-box box-client">
+              <div class="box-title">React SPA</div>
+              <div class="box-desc">Next.js 14 App Router, Tailwind, Zustand state</div>
+            </div>
+            <div class="arch-box box-client">
+              <div class="box-title">Audio Engine</div>
+              <div class="box-desc">Web Audio API + Tone.js — tanpura drone, playback</div>
+            </div>
+            <div class="arch-box box-client">
+              <div class="box-title">Pitch Detector</div>
+              <div class="box-desc">Mic input → autocorrelation → swara match (browser)</div>
+            </div>
+            <div class="arch-box box-client">
+              <div class="box-title">PWA Shell</div>
+              <div class="box-desc">Service worker, offline tala metronome</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-row"><span class="arrow">↕</span><span class="arrow">↕</span><span class="arrow">↕</span></div>
+
+        <!-- API Layer -->
+        <div class="arch-layer" style="grid-template-columns: 60px 1fr;">
+          <span class="layer-label">API</span>
+          <div class="layer-boxes">
+            <div class="arch-box box-api">
+              <div class="box-title">Spring Boot 3.3</div>
+              <div class="box-desc">REST controllers — auth, user, raga, progress routes. Virtual threads via Project Loom</div>
+            </div>
+            <div class="arch-box box-api">
+              <div class="box-title">Spring Security 6</div>
+              <div class="box-desc">JWT filter chain, Google OAuth2, stateless auth with refresh tokens</div>
+            </div>
+            <div class="arch-box box-api">
+              <div class="box-title">Spring WebSocket</div>
+              <div class="box-desc">STOMP over WebSocket — real-time XP updates, streak notifications</div>
+            </div>
+            <div class="arch-box box-api">
+              <div class="box-title">Spring Scheduler</div>
+              <div class="box-desc">@Scheduled cron jobs — daily challenge rotation, streak expiry checks</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-row"><span class="arrow">↕</span><span class="arrow">↕</span></div>
+
+        <!-- Service Layer -->
+        <div class="arch-layer" style="grid-template-columns: 60px 1fr;">
+          <span class="layer-label">Services</span>
+          <div class="layer-boxes">
+            <div class="arch-box box-service">
+              <div class="box-title">PracticeService</div>
+              <div class="box-desc">Session scoring logic, accuracy calc, alankaar generation. Uses Java 21 Records for immutable DTOs</div>
+            </div>
+            <div class="arch-box box-service">
+              <div class="box-title">GamificationService</div>
+              <div class="box-desc">XP awards, streak tracking, badge unlock — Pattern Matching + sealed classes for event types</div>
+            </div>
+            <div class="arch-box box-service">
+              <div class="box-title">RagaService</div>
+              <div class="box-desc">Raga DB queries, swara set lookup, quiz generation. Structured Concurrency for parallel fetches</div>
+            </div>
+            <div class="arch-box box-service">
+              <div class="box-title">NotificationService</div>
+              <div class="box-desc">Email/push reminders via async Virtual Threads — non-blocking, no thread pool exhaustion</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-row"><span class="arrow">↕</span><span class="arrow">↕</span><span class="arrow">↕</span></div>
+
+        <!-- Data Layer -->
+        <div class="arch-layer" style="grid-template-columns: 60px 1fr;">
+          <span class="layer-label">Data</span>
+          <div class="layer-boxes">
+            <div class="arch-box box-data">
+              <div class="box-title">PostgreSQL + Hibernate</div>
+              <div class="box-desc">JPA/Hibernate ORM with Spring Data JPA repositories, Flyway migrations</div>
+            </div>
+            <div class="arch-box box-data">
+              <div class="box-title">Redis (Lettuce)</div>
+              <div class="box-desc">Spring Data Redis — streak state, leaderboard sorted sets, session cache</div>
+            </div>
+            <div class="arch-box box-audio">
+              <div class="box-title">AWS S3 (Free Tier)</div>
+              <div class="box-desc">AWS SDK v2 for Java — raga audio, tanpura files. 5 GB free storage</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-row"><span class="arrow">↕</span><span class="arrow">↕</span><span class="arrow">↕</span></div>
+
+        <!-- Infra Layer -->
+        <div class="arch-layer" style="grid-template-columns: 60px 1fr;">
+          <span class="layer-label">Infra</span>
+          <div class="layer-boxes">
+            <div class="arch-box box-client">
+              <div class="box-title">Docker + Tomcat 10</div>
+              <div class="box-desc">Spring Boot WAR deployed inside tomcat:10-jre21 Docker image. Jib builds image via Gradle</div>
+            </div>
+            <div class="arch-box box-api">
+              <div class="box-title">Kubernetes (k3s on EC2)</div>
+              <div class="box-desc">Lightweight k3s cluster on t2.micro. Deployments, Services, ConfigMaps, Secrets</div>
+            </div>
+            <div class="arch-box box-service">
+              <div class="box-title">ECR Public Gallery</div>
+              <div class="box-desc">public.ecr.aws — zero rate limits, no auth for pulls, 50 GB/mo free egress. Same AWS account, no new service.</div>
+            </div>
+            <div class="arch-box box-data">
+              <div class="box-title">AWS Free Tier Services</div>
+              <div class="box-desc">EC2 t2.micro · RDS t3.micro (PostgreSQL) · S3 · CloudFront · Route53</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:24px;">
+      <strong>Key architectural decision (v3.2):</strong> Next.js is built as a static export and bundled <em>inside</em> the Spring Boot WAR under <code>/src/main/webapp/</code>. Tomcat serves both frontend at <code>/</code> and backend at <code>/api/*</code> from a <strong>single Docker image</strong>. The image is stored on <strong>AWS ECR Public</strong> (<code>public.ecr.aws</code>) — same AWS account, zero extra accounts, no pull rate limits (unlike Docker Hub's 200/6hr cap which GitHub Actions shared runners hit quickly), and 50 GB/month free egress. k3s pulls the image without any credentials since ECR Public repos are openly pullable.
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 1b. JAVA 21 FEATURES IN USE -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">01b —</span>
+      <h2>Java 21 <em>Feature Usage</em></h2>
+    </div>
+
+    <div class="feature-grid">
+
+      <div class="feature-card" data-num="①">
+        <span class="feature-icon">🧵</span>
+        <h3>Virtual Threads (Project Loom)</h3>
+        <p>Every HTTP request runs on a lightweight virtual thread. No WebFlux reactive complexity needed — Spring Boot 3.3 enables this with one config flag. Handles thousands of concurrent practice sessions cheaply.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">spring.threads.virtual.enabled=true</span>
+          <span class="tag tag-domain">NotificationService</span>
+          <span class="tag tag-domain">SessionService</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="②">
+        <span class="feature-icon">📦</span>
+        <h3>Records (Immutable DTOs)</h3>
+        <p>All API request/response payloads modelled as Java Records — zero boilerplate, compile-time immutability. Serialized cleanly by Jackson.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">record SessionRequest(...)</span>
+          <span class="tag tag-domain">All API DTOs</span>
+          <span class="tag tag-game">XpAwardEvent</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="③">
+        <span class="feature-icon">🔀</span>
+        <h3>Sealed Classes + Pattern Matching</h3>
+        <p>Gamification events modelled as a sealed hierarchy: <code>XpEvent</code>, <code>BadgeEvent</code>, <code>StreakEvent</code>. Switch expressions with exhaustive pattern matching replace verbose if-else chains in the event processor.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">sealed interface GamificationEvent</span>
+          <span class="tag tag-domain">GamificationService</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="④">
+        <span class="feature-icon">🔗</span>
+        <h3>Structured Concurrency</h3>
+        <p>RagaService fetches raga detail + reference audio URL + user completion status in parallel using <code>StructuredTaskScope</code>. Fails fast if any sub-task fails — cleaner than CompletableFuture chains.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">StructuredTaskScope.ShutdownOnFailure</span>
+          <span class="tag tag-domain">RagaService</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="⑤">
+        <span class="feature-icon">🔍</span>
+        <h3>Pattern Matching for instanceof</h3>
+        <p>Used throughout service layer to cleanly handle Optional unwrapping and polymorphic badge trigger conditions without verbose casting or null checks.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">if (event instanceof XpEvent e)</span>
+          <span class="tag tag-domain">BadgeEngine</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="⑥">
+        <span class="feature-icon">📝</span>
+        <h3>Text Blocks</h3>
+        <p>SQL queries in repositories written as clean multiline text blocks — no string concatenation, readable native queries for complex XP aggregation and leaderboard queries.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">@Query("""...""")</span>
+          <span class="tag tag-domain">SessionRepository</span>
+          <span class="tag tag-domain">ProgressRepository</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Code snippet -->
+    <div style="margin-top:28px;background:rgba(26,18,8,0.9);border:1px solid var(--border);border-radius:4px;padding:28px;overflow-x:auto;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Sample — GamificationService.java</div>
+      <pre style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.8;color:var(--ivory-dark);white-space:pre-wrap;"><span style="color:#7A8FBF">// Sealed event hierarchy</span>
+<span style="color:var(--gold)">sealed interface</span> <span style="color:var(--gold-light)">GamificationEvent</span>
+    <span style="color:var(--gold)">permits</span> XpEvent, BadgeEvent, StreakEvent {}
+
+<span style="color:var(--gold)">record</span> <span style="color:var(--gold-light)">XpEvent</span>(<span style="color:var(--saffron)">int</span> amount, String reason) <span style="color:var(--gold)">implements</span> GamificationEvent {}
+<span style="color:var(--gold)">record</span> <span style="color:var(--gold-light)">BadgeEvent</span>(String badgeId, String userId) <span style="color:var(--gold)">implements</span> GamificationEvent {}
+<span style="color:var(--gold)">record</span> <span style="color:var(--gold-light)">StreakEvent</span>(<span style="color:var(--saffron)">int</span> newStreak, <span style="color:var(--saffron)">boolean</span> milestone) <span style="color:var(--gold)">implements</span> GamificationEvent {}
+
+<span style="color:var(--jade-light)">// Pattern matching switch in event processor</span>
+<span style="color:var(--gold)">void</span> <span style="color:var(--gold-light)">process</span>(GamificationEvent event) {
+    <span style="color:var(--gold)">switch</span> (event) {
+        <span style="color:var(--gold)">case</span> XpEvent(var amount, var reason)  -> awardXp(amount, reason);
+        <span style="color:var(--gold)">case</span> BadgeEvent(var id, var uid)       -> unlockBadge(id, uid);
+        <span style="color:var(--gold)">case</span> StreakEvent(var s, var milestone) -> updateStreak(s, milestone);
+    }
+}</pre>
+    </div>
+  </section>
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">02 —</span>
+      <h2>MVP <em>Feature Set</em></h2>
+    </div>
+
+    <div class="feature-grid">
+
+      <div class="feature-card" data-num="1">
+        <span class="feature-icon">🎵</span>
+        <h3>Swara Trainer</h3>
+        <p>Real-time pitch detection via microphone. Visual sur meter shows how close the sung note is to the target swara. Tanpura drone plays in background.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">Web Audio API</span>
+          <span class="tag tag-tech">Tone.js</span>
+          <span class="tag tag-domain">Sa Re Ga Ma</span>
+          <span class="tag tag-game">XP per session</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="2">
+        <span class="feature-icon">🥁</span>
+        <h3>Tala Metronome</h3>
+        <p>Visual beat tracker for Teentaal (16), Ektaal (12), and Rupak (7). Tap-to-feel mode. Bols displayed in real time. Speed adjustment from vilambit to drut.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">Web Audio API</span>
+          <span class="tag tag-domain">Bol notation</span>
+          <span class="tag tag-game">Streak bonus</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="3">
+        <span class="feature-icon">🌅</span>
+        <h3>Raga of the Day</h3>
+        <p>Daily raga shown with arohana/avarohana, time of day, mood. Listen to a reference clip. Mark as practiced. Earns daily challenge XP.</p>
+        <div class="feature-tags">
+          <span class="tag tag-domain">Raga DB</span>
+          <span class="tag tag-game">Daily Challenge</span>
+          <span class="tag tag-game">+50 XP</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="4">
+        <span class="feature-icon">🎓</span>
+        <h3>Alankaar Practice</h3>
+        <p>Pre-set pattern sequences (1234, 12321, 123456…) with metronome sync. Difficulty tiers. Progress unlocks more complex patterns over time.</p>
+        <div class="feature-tags">
+          <span class="tag tag-domain">Sargam</span>
+          <span class="tag tag-game">Level unlock</span>
+          <span class="tag tag-tech">Tone.js</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="5">
+        <span class="feature-icon">🔥</span>
+        <h3>Practice Streaks</h3>
+        <p>Daily practice streaks with visual flame animation. Streak recovery tokens (earned by hitting weekly targets). Streak milestones unlock badges.</p>
+        <div class="feature-tags">
+          <span class="tag tag-game">Streak System</span>
+          <span class="tag tag-game">Badge unlock</span>
+          <span class="tag tag-tech">Redis</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="6">
+        <span class="feature-icon">🏅</span>
+        <h3>XP & Level System</h3>
+        <p>Every session earns XP. Level up from Shishya → Ustad. Dashboard shows progress bar, recent activity log, and upcoming badge targets.</p>
+        <div class="feature-tags">
+          <span class="tag tag-game">Progression</span>
+          <span class="tag tag-game">6 Levels</span>
+          <span class="tag tag-tech">PostgreSQL</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 3. DATABASE SCHEMA -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">03 —</span>
+      <h2>Database <em>Schema</em></h2>
+    </div>
+
+    <div class="schema-grid">
+
+      <div class="schema-table">
+        <div class="schema-header"><span>👤</span><span class="schema-name">users</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">email</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">name</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">instrument</span><span class="field-type">enum</span></div>
+          <div class="schema-field"><span class="field-name">level_id</span><span class="field-type field-fk">fk→levels</span></div>
+          <div class="schema-field"><span class="field-name">total_xp</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">streak_count</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">streak_tokens</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">last_practice</span><span class="field-type">timestamp</span></div>
+          <div class="schema-field"><span class="field-name">created_at</span><span class="field-type">timestamp</span></div>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <div class="schema-header"><span>🎵</span><span class="schema-name">ragas</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">name</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">arohana</span><span class="field-type">text[]</span></div>
+          <div class="schema-field"><span class="field-name">avarohana</span><span class="field-type">text[]</span></div>
+          <div class="schema-field"><span class="field-name">vadi</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">samvadi</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">time_of_day</span><span class="field-type">enum</span></div>
+          <div class="schema-field"><span class="field-name">mood</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">thaat</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">audio_url</span><span class="field-type">text</span></div>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <div class="schema-header"><span>📊</span><span class="schema-name">practice_sessions</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">user_id</span><span class="field-type field-fk">fk→users</span></div>
+          <div class="schema-field"><span class="field-name">type</span><span class="field-type">enum</span></div>
+          <div class="schema-field"><span class="field-name">duration_sec</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">accuracy_pct</span><span class="field-type">float</span></div>
+          <div class="schema-field"><span class="field-name">xp_earned</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">raga_id</span><span class="field-type field-fk">fk→ragas</span></div>
+          <div class="schema-field"><span class="field-name">metadata</span><span class="field-type">jsonb</span></div>
+          <div class="schema-field"><span class="field-name">created_at</span><span class="field-type">timestamp</span></div>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <div class="schema-header"><span>🏅</span><span class="schema-name">badges</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">name</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">description</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">icon_url</span><span class="field-type">text</span></div>
+          <div class="schema-field"><span class="field-name">trigger_type</span><span class="field-type">enum</span></div>
+          <div class="schema-field"><span class="field-name">trigger_value</span><span class="field-type">int</span></div>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <div class="schema-header"><span>✨</span><span class="schema-name">user_badges</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">user_id</span><span class="field-type field-fk">fk→users</span></div>
+          <div class="schema-field"><span class="field-name">badge_id</span><span class="field-type field-fk">fk→badges</span></div>
+          <div class="schema-field"><span class="field-name">earned_at</span><span class="field-type">timestamp</span></div>
+        </div>
+      </div>
+
+      <div class="schema-table">
+        <div class="schema-header"><span>📅</span><span class="schema-name">daily_challenges</span></div>
+        <div class="schema-body">
+          <div class="schema-field"><span class="field-name field-pk">id</span><span class="field-type">uuid PK</span></div>
+          <div class="schema-field"><span class="field-name">date</span><span class="field-type">date</span></div>
+          <div class="schema-field"><span class="field-name">raga_id</span><span class="field-type field-fk">fk→ragas</span></div>
+          <div class="schema-field"><span class="field-name">xp_reward</span><span class="field-type">int</span></div>
+          <div class="schema-field"><span class="field-name">completions</span><span class="field-type">int</span></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 4. API ENDPOINTS -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">04 —</span>
+      <h2>API <em>Endpoints</em></h2>
+    </div>
+
+    <div class="endpoint-list">
+      <div class="xp-row header" style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);padding:10px 18px;background:rgba(212,160,23,0.05);border-bottom:1px solid var(--border);">
+        <div>Method + Path</div><div>Description</div>
+      </div>
+
+      <div class="endpoint"><span class="method POST">POST</span><span class="endpoint-path">/api/auth/register</span><span class="endpoint-desc">New user registration with instrument + level onboarding</span></div>
+      <div class="endpoint"><span class="method POST">POST</span><span class="endpoint-path">/api/auth/login</span><span class="endpoint-desc">Email/password or Google OAuth login, returns JWT</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/users/me</span><span class="endpoint-desc">Current user profile, XP, level, streak, recent badges</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/ragas</span><span class="endpoint-desc">List ragas with filters (thaat, time, mood)</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/ragas/:id</span><span class="endpoint-desc">Full raga detail — arohana, avarohana, audio URL</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/challenge/today</span><span class="endpoint-desc">Today's raga challenge with completion status</span></div>
+      <div class="endpoint"><span class="method POST">POST</span><span class="endpoint-path">/api/sessions</span><span class="endpoint-desc">Submit practice session — type, duration, accuracy score</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/sessions</span><span class="endpoint-desc">User's practice history with pagination + filters</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/progress</span><span class="endpoint-desc">XP breakdown, level progress, streak state, badge log</span></div>
+      <div class="endpoint"><span class="method GET">GET</span><span class="endpoint-path">/api/badges</span><span class="endpoint-desc">All badges — earned status, unlock conditions</span></div>
+      <div class="endpoint"><span class="method PATCH">PATCH</span><span class="endpoint-path">/api/users/me/settings</span><span class="endpoint-desc">Update shruti, instrument, notification preferences</span></div>
+      <div class="endpoint"><span class="method POST">POST</span><span class="endpoint-path">/api/streak/recover</span><span class="endpoint-desc">Use a streak recovery token to restore broken streak</span></div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 5. GAMIFICATION LOGIC -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">05 —</span>
+      <h2>Gamification <em>Logic</em></h2>
+    </div>
+
+    <div class="xp-table">
+      <div class="xp-row header">
+        <div>Action</div><div>XP</div><div>Frequency</div><div>Conditions</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Complete Swara session (10 min)</div>
+        <div class="xp-pts">+20</div>
+        <div class="xp-freq">Daily ×3</div>
+        <div class="xp-note">+5 bonus if accuracy > 80%</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Complete Tala session (10 min)</div>
+        <div class="xp-pts">+15</div>
+        <div class="xp-freq">Daily ×3</div>
+        <div class="xp-note">+5 if no beats missed</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Daily Raga Challenge</div>
+        <div class="xp-pts">+50</div>
+        <div class="xp-freq">Daily ×1</div>
+        <div class="xp-note">Must listen + practice ≥ 5 min</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Complete Alankaar set</div>
+        <div class="xp-pts">+10</div>
+        <div class="xp-freq">Per set</div>
+        <div class="xp-note">+10 per difficulty tier unlocked</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Maintain 7-day streak</div>
+        <div class="xp-pts">+100</div>
+        <div class="xp-freq">Weekly</div>
+        <div class="xp-note">+1 streak recovery token</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">Maintain 30-day streak</div>
+        <div class="xp-pts">+500</div>
+        <div class="xp-freq">Monthly</div>
+        <div class="xp-note">Unlocks "Sadhak" badge</div>
+      </div>
+      <div class="xp-row">
+        <div class="xp-action">First time logging in</div>
+        <div class="xp-pts">+25</div>
+        <div class="xp-freq">Once</div>
+        <div class="xp-note">Welcome bonus</div>
+      </div>
+    </div>
+
+    <div style="margin-top: 32px;">
+      <h3 style="margin-bottom:16px;">Progression Levels</h3>
+      <div class="levels-row">
+        <div class="level-badge"><span class="emoji">🌱</span><div class="title">Shishya</div><div class="xp-req">0 XP</div></div>
+        <div class="level-badge"><span class="emoji">📖</span><div class="title">Vidyarthi</div><div class="xp-req">500 XP</div></div>
+        <div class="level-badge"><span class="emoji">🎶</span><div class="title">Sadhaka</div><div class="xp-req">1,500 XP</div></div>
+        <div class="level-badge"><span class="emoji">🎵</span><div class="title">Kalakar</div><div class="xp-req">4,000 XP</div></div>
+        <div class="level-badge"><span class="emoji">🏮</span><div class="title">Pandit</div><div class="xp-req">10,000 XP</div></div>
+        <div class="level-badge"><span class="emoji">👑</span><div class="title">Ustad</div><div class="xp-req">25,000 XP</div></div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 6. USER FLOW -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">06 —</span>
+      <h2>Core <em>User Flow</em></h2>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:4px;padding:32px;">
+      <div class="flow-steps">
+        <div class="flow-step">
+          <div class="flow-step-num">1</div>
+          <h4>Onboard</h4>
+          <p>Choose instrument, experience level, daily goal (15/30/60 min)</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-step-num">2</div>
+          <h4>Dashboard</h4>
+          <p>See streak, XP bar, Raga of the Day, suggested session</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-step-num">3</div>
+          <h4>Practice</h4>
+          <p>Launch Swara Trainer or Tala Metronome, mic/speaker enabled</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-step-num">4</div>
+          <h4>Score</h4>
+          <p>Session ends → accuracy shown → XP awarded with animation</p>
+        </div>
+        <div class="flow-step">
+          <div class="flow-step-num">5</div>
+          <h4>Reward</h4>
+          <p>Streak updated, badge unlocked if milestone hit, level-up if threshold crossed</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- NEW: AWS INFRASTRUCTURE -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">07a —</span>
+      <h2>AWS <em>Infrastructure</em> (Free Tier)</h2>
+    </div>
+
+    <div class="callout">
+      <strong>Free Tier Strategy:</strong> Every AWS service below is within the 12-month free tier. The entire MVP can run at $0/month during development and early launch. Watch RDS + EC2 hours — free tier gives 750 hrs/month each, which covers exactly 1 instance running 24/7.
+    </div>
+
+    <div class="feature-grid" style="margin-top:24px;">
+
+      <div class="feature-card" data-num="①">
+        <span class="feature-icon">🖥️</span>
+        <h3>EC2 t2.micro</h3>
+        <p>Runs the k3s Kubernetes cluster. Hosts Tomcat pod (Spring Boot WAR), Redis pod, and Nginx ingress. 750 hrs/month free — exactly 1 instance 24/7.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">750 hrs/mo free</span>
+          <span class="tag tag-domain">1 vCPU · 1 GB RAM</span>
+          <span class="tag tag-game">k3s + Tomcat</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="②">
+        <span class="feature-icon">🗄️</span>
+        <h3>RDS t3.micro (PostgreSQL 16)</h3>
+        <p>Managed PostgreSQL outside the cluster — more reliable than in-pod DB for MVP data safety. 750 hrs/month free, 20 GB storage free. Multi-AZ disabled to stay in free tier.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">750 hrs/mo free</span>
+          <span class="tag tag-domain">20 GB storage</span>
+          <span class="tag tag-game">Single-AZ</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="③">
+        <span class="feature-icon">🪣</span>
+        <h3>S3 Standard</h3>
+        <p>Stores raga audio samples, tanpura drone files, and Next.js static export. 5 GB free storage, 20K GET + 2K PUT requests/month free. Served globally via CloudFront.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">5 GB free</span>
+          <span class="tag tag-domain">Audio + Static</span>
+          <span class="tag tag-game">+ CloudFront CDN</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="④">
+        <span class="feature-icon">🌐</span>
+        <h3>CloudFront CDN</h3>
+        <p>Serves the Next.js static frontend and S3 audio assets globally. 1 TB data transfer out free/month + 10M HTTPS requests/month free. Origin: S3 bucket.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">1 TB egress free</span>
+          <span class="tag tag-domain">Next.js + Audio</span>
+          <span class="tag tag-game">Global edge</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="⑤">
+        <span class="feature-icon">📦</span>
+        <h3>ECR Public Gallery</h3>
+        <p>AWS's free public container registry at <code>public.ecr.aws</code>. No new account — lives in your existing AWS account. <strong>Zero pull rate limits</strong> (vs Docker Hub's 200/6hr on free tier). GitHub Actions pushes using OIDC — no long-lived AWS keys in CI secrets. k3s pulls anonymously, no <code>imagePullSecret</code> needed.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">50 GB egress free/mo</span>
+          <span class="tag tag-domain">No rate limits</span>
+          <span class="tag tag-game">OIDC auth in CI</span>
+        </div>
+      </div>
+
+      <div class="feature-card" data-num="⑥">
+        <span class="feature-icon">📧</span>
+        <h3>SES (Simple Email Service)</h3>
+        <p>Sends practice reminders and streak alerts. 3,000 messages/month free (when sent from EC2). Replaces external Resend — keeps everything in AWS ecosystem.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">3K msgs/mo free</span>
+          <span class="tag tag-domain">Streak reminders</span>
+          <span class="tag tag-game">Spring Mail + SES</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- AWS Free Tier limits table -->
+    <div style="margin-top:32px;">
+      <h3 style="margin-bottom:16px;">Free Tier Limits & Guardrails</h3>
+      <div class="xp-table">
+        <div class="xp-row header">
+          <div>AWS Service</div><div>Free Limit</div><div>MVP Usage Est.</div><div>Risk</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">EC2 t2.micro</div>
+          <div class="xp-pts">750 hrs/mo</div>
+          <div class="xp-freq">744 hrs (1 inst.)</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe — 1 instance only</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">RDS t3.micro</div>
+          <div class="xp-pts">750 hrs/mo</div>
+          <div class="xp-freq">744 hrs (1 inst.)</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe — Single-AZ</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">S3 Storage</div>
+          <div class="xp-pts">5 GB</div>
+          <div class="xp-freq">~1–2 GB audio</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe for MVP</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">CloudFront Egress</div>
+          <div class="xp-pts">1 TB/mo</div>
+          <div class="xp-freq">~10–50 GB</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">ECR Public (registry)</div>
+          <div class="xp-pts">50 GB egress/mo</div>
+          <div class="xp-freq">~2–5 GB pulls</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ No rate limits · same AWS account</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">SES Emails</div>
+          <div class="xp-pts">3,000/mo</div>
+          <div class="xp-freq">~500–1000/mo</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe for MVP users</div>
+        </div>
+        <div class="xp-row">
+          <div class="xp-action">Data Transfer Out</div>
+          <div class="xp-pts">100 GB/mo (EC2)</div>
+          <div class="xp-freq">~5–20 GB API</div>
+          <div class="xp-note" style="color:var(--jade-light)">✓ Safe</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ECR Public rationale -->
+    <div style="margin-top:28px;background:rgba(26,107,74,0.07);border:1px solid rgba(26,107,74,0.25);border-radius:4px;padding:28px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--jade-light);margin-bottom:16px;">Registry Decision — Why ECR Public over alternatives</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;">
+        <div style="padding:14px;background:rgba(26,107,74,0.1);border:1px solid rgba(26,107,74,0.2);border-radius:3px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--jade-light);margin-bottom:6px;">✓ ECR Public (chosen)</div>
+          <div style="font-size:13px;color:var(--ivory-dark);line-height:1.5;">Same AWS account. Zero pull rate limits. 50 GB free egress/mo. GitHub Actions pushes via OIDC — no stored AWS keys in secrets. k3s pulls with no credentials.</div>
+        </div>
+        <div style="padding:14px;background:rgba(139,58,16,0.1);border:1px solid rgba(139,58,16,0.2);border-radius:3px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#E8956A;margin-bottom:6px;">✗ Docker Hub (rejected)</div>
+          <div style="font-size:13px;color:var(--ivory-dark);line-height:1.5;">Requires new account. GitHub Actions shared runners share IPs — free tier 200 pulls/6hr cap is hit quickly across CI runs. Third-party dependency.</div>
+        </div>
+        <div style="padding:14px;background:rgba(139,58,16,0.1);border:1px solid rgba(139,58,16,0.2);border-radius:3px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#E8956A;margin-bottom:6px;">✗ S3 Image Store (rejected)</div>
+          <div style="font-size:13px;color:var(--ivory-dark);line-height:1.5;">K8s can't pull from S3 natively — needs a manual <code>docker load</code> script on EC2. Eats into 5 GB audio budget. No image tagging or version management.</div>
+        </div>
+        <div style="padding:14px;background:rgba(139,58,16,0.1);border:1px solid rgba(139,58,16,0.2);border-radius:3px;">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:#E8956A;margin-bottom:6px;">✗ ECR Private (rejected)</div>
+          <div style="font-size:13px;color:var(--ivory-dark);line-height:1.5;">Requires IAM <code>imagePullSecret</code> in k3s and credential rotation. Adds auth complexity for no MVP benefit. ECR Public gives same AWS residency, far simpler.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- NEW: DOCKER + KUBERNETES -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">07b —</span>
+      <h2>Docker + <em>Kubernetes</em> Design</h2>
+    </div>
+
+    <div class="callout">
+      <strong>Single image + ECR Public strategy:</strong> Next.js is statically exported (<code>next export</code>) during the CI build. The output is copied into <code>src/main/webapp/</code> before the WAR is assembled — Tomcat serves frontend at <code>/</code> and API at <code>/api/*</code> from one container. The image is pushed to <strong>AWS ECR Public</strong> (<code>public.ecr.aws/raagpath/app:latest</code>) using GitHub Actions OIDC — no long-lived AWS credentials stored in CI. k3s pulls the image with no auth required since ECR Public repos are anonymously pullable. No <code>imagePullSecret</code> needed in K8s manifests.
+    </div>
+
+    <!-- Tomcat packaging -->
+    <h3 style="margin: 28px 0 16px;">Single Image: Next.js + Spring Boot WAR in Tomcat</h3>
+    <div style="background:rgba(26,18,8,0.9);border:1px solid var(--border);border-radius:4px;padding:28px;overflow-x:auto;margin-bottom:28px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">Dockerfile — Single image (Next.js bundled inside Tomcat WAR)</div>
+      <pre style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.9;color:var(--ivory-dark);white-space:pre-wrap;"><span style="color:var(--muted)"># ── Stage 1: Build Next.js static export ──────────────────</span>
+<span style="color:var(--gold)">FROM</span> <span style="color:var(--gold-light)">node:20-alpine</span> <span style="color:var(--muted)">AS frontend</span>
+<span style="color:var(--gold)">WORKDIR</span> /app/frontend
+<span style="color:var(--gold)">COPY</span> frontend/package*.json ./
+<span style="color:var(--gold)">RUN</span> npm ci
+<span style="color:var(--gold)">COPY</span> frontend/ .
+<span style="color:var(--gold)">RUN</span> npm run build <span style="color:var(--muted)"># next export → /app/frontend/out/</span>
+
+<span style="color:var(--muted)"># ── Stage 2: Build Spring Boot WAR ────────────────────────</span>
+<span style="color:var(--gold)">FROM</span> <span style="color:var(--gold-light)">gradle:8-jdk21</span> <span style="color:var(--muted)">AS backend</span>
+<span style="color:var(--gold)">WORKDIR</span> /app/backend
+<span style="color:var(--gold)">COPY</span> backend/ .
+<span style="color:var(--muted)"># Copy Next.js static output into webapp root (served by Tomcat at /)</span>
+<span style="color:var(--gold)">COPY</span> --from=frontend /app/frontend/out/ src/main/webapp/
+<span style="color:var(--gold)">RUN</span> gradle war --no-daemon <span style="color:var(--muted)"># produces build/libs/raagpath.war</span>
+
+<span style="color:var(--muted)"># ── Stage 3: Runtime — Tomcat 10 + JRE 21 ─────────────────</span>
+<span style="color:var(--gold)">FROM</span> <span style="color:var(--gold-light)">tomcat:10.1-jre21-temurin</span> <span style="color:var(--muted)">AS runtime</span>
+<span style="color:var(--gold)">RUN</span> rm -rf /usr/local/tomcat/webapps/ROOT
+<span style="color:var(--gold)">COPY</span> --from=backend /app/backend/build/libs/raagpath.war \
+                     /usr/local/tomcat/webapps/ROOT.war
+<span style="color:var(--gold)">EXPOSE</span> 8080
+<span style="color:var(--gold)">CMD</span> ["catalina.sh", "run"]</pre>
+    </div>
+
+    <div class="callout" style="margin-bottom:28px;">
+      <strong>How routing works in a single image:</strong> Tomcat serves <code>/</code> → Next.js <code>index.html</code> (static files from webapp root). <code>/api/*</code> → Spring MVC dispatcher servlet. <code>/ws/*</code> → Spring WebSocket STOMP endpoint. No Nginx needed — Tomcat handles everything behind Traefik ingress.
+    </div>
+
+    <!-- Spring Boot WAR note -->
+    <div style="background:rgba(26,18,8,0.9);border:1px solid var(--border);border-radius:4px;padding:28px;overflow-x:auto;margin-bottom:28px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">build.gradle.kts — WAR packaging</div>
+      <pre style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.9;color:var(--ivory-dark);white-space:pre-wrap;"><span style="color:var(--gold)">plugins</span> {
+    id(<span style="color:var(--jade-light)">"war"</span>)   <span style="color:var(--muted)">// WAR for external Tomcat deployment</span>
+}
+
+<span style="color:var(--gold)">dependencies</span> {
+    <span style="color:var(--muted)">// Mark embedded Tomcat as "provided" — external Tomcat container runs it</span>
+    providedRuntime(<span style="color:var(--jade-light)">"org.springframework.boot:spring-boot-starter-tomcat"</span>)
+}</pre>
+    </div>
+
+    <!-- GitHub Actions CI/CD pipeline -->
+    <h3 style="margin: 28px 0 16px;">GitHub Actions CI/CD — ECR Public Push</h3>
+    <div style="background:rgba(26,18,8,0.9);border:1px solid var(--border);border-radius:4px;padding:28px;overflow-x:auto;margin-bottom:28px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:16px;">.github/workflows/deploy.yml</div>
+      <pre style="font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.9;color:var(--ivory-dark);white-space:pre-wrap;"><span style="color:var(--gold)">name:</span> Build & Deploy
+
+<span style="color:var(--gold)">on:</span>
+  push:
+    branches: [main]
+
+<span style="color:var(--gold)">permissions:</span>
+  id-token: write   <span style="color:var(--muted)"># required for OIDC — no long-lived AWS keys stored</span>
+  contents: read
+
+<span style="color:var(--gold)">jobs:</span>
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      <span style="color:var(--muted)"># 1. Authenticate to AWS via OIDC (no stored secrets)</span>
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::&lt;account&gt;:role/github-actions-ecr
+          aws-region: us-east-1   <span style="color:var(--muted)"># ECR Public is always us-east-1</span>
+
+      <span style="color:var(--muted)"># 2. Login to ECR Public</span>
+      - run: |
+          aws ecr-public get-login-password --region us-east-1 \
+            | docker login --username AWS --password-stdin public.ecr.aws
+
+      <span style="color:var(--muted)"># 3. Build single image (Next.js + WAR + Tomcat)</span>
+      - run: |
+          docker build -t public.ecr.aws/&lt;alias&gt;/raagpath:latest .
+          docker build -t public.ecr.aws/&lt;alias&gt;/raagpath:${{ github.sha }} .
+
+      <span style="color:var(--muted)"># 4. Push both tags to ECR Public</span>
+      - run: |
+          docker push public.ecr.aws/&lt;alias&gt;/raagpath:latest
+          docker push public.ecr.aws/&lt;alias&gt;/raagpath:${{ github.sha }}
+
+      <span style="color:var(--muted)"># 5. SSH to EC2, tell k3s to pull the new image</span>
+      - run: |
+          ssh -i ${{ secrets.EC2_KEY }} ec2-user@${{ secrets.EC2_HOST }} \
+            "kubectl rollout restart deployment/raagpath"</pre>
+    </div>
+
+    <!-- K8s manifests -->
+    <h3 style="margin: 28px 0 16px;">Kubernetes Workloads on EC2</h3>
+    <div class="feature-grid">
+      <div class="feature-card" data-num="K1">
+        <span class="feature-icon">🚀</span>
+        <h3>raagpath Deployment</h3>
+        <p>1 replica of the single Tomcat pod — serves both Next.js frontend (<code>/</code>) and Spring API (<code>/api/*</code>). Image: <code>public.ecr.aws/&lt;alias&gt;/raagpath:latest</code>. No <code>imagePullSecret</code> needed — ECR Public is anonymously pullable. Liveness probe on <code>/api/actuator/health</code>.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">replicas: 1</span>
+          <span class="tag tag-domain">port: 8080</span>
+          <span class="tag tag-tech">ECR Public · no auth</span>
+        </div>
+      </div>
+      <div class="feature-card" data-num="K2">
+        <span class="feature-icon">🔴</span>
+        <h3>redis Deployment</h3>
+        <p>Single Redis pod using official <code>redis:7-alpine</code> image. PersistentVolumeClaim for data persistence across restarts. ClusterIP service — not exposed externally.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">redis:7-alpine</span>
+          <span class="tag tag-domain">PVC: 1Gi</span>
+          <span class="tag tag-tech">ClusterIP</span>
+        </div>
+      </div>
+      <div class="feature-card" data-num="K3">
+        <span class="feature-icon">🌐</span>
+        <h3>Nginx Ingress Controller</h3>
+        <p>k3s ships with Traefik by default — used as ingress. Routes <code>/api/*</code> to Tomcat service and <code>/ws/*</code> for WebSocket. TLS termination via Let's Encrypt cert-manager.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">Traefik (k3s)</span>
+          <span class="tag tag-domain">TLS: Let's Encrypt</span>
+          <span class="tag tag-game">/api + /ws routing</span>
+        </div>
+      </div>
+      <div class="feature-card" data-num="K4">
+        <span class="feature-icon">🔐</span>
+        <h3>ConfigMaps + Secrets</h3>
+        <p>DB credentials, JWT secret, AWS SES keys stored as K8s Secrets (base64). Non-sensitive config (Tomcat port, Spring profiles) in ConfigMap. Mounted as env vars.</p>
+        <div class="feature-tags">
+          <span class="tag tag-tech">K8s Secrets</span>
+          <span class="tag tag-domain">ConfigMap</span>
+          <span class="tag tag-game">Env injection</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Full deployment topology diagram -->
+    <h3 style="margin: 32px 0 16px;">Full Deployment Topology</h3>
+    <div class="arch-diagram" style="padding:32px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:20px;align-items:start;">
+
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">User</div>
+          <div class="arch-box box-client" style="margin-bottom:10px;">
+            <div class="box-title">Browser</div>
+            <div class="box-desc">Next.js SPA served from CloudFront</div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">AWS Free Tier — ap-south-1 (Mumbai)</div>
+          <div style="border:1px dashed rgba(212,160,23,0.3);border-radius:4px;padding:16px;margin-bottom:10px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gold);margin-bottom:10px;letter-spacing:0.1em;">CloudFront + S3 (audio only)</div>
+            <div class="arch-box box-client" style="margin-bottom:6px;">
+              <div class="box-title">S3 Bucket</div>
+              <div class="box-desc">Raga audio samples only — frontend is now served by Tomcat</div>
+            </div>
+          </div>
+          <div style="border:1px dashed rgba(232,101,10,0.3);border-radius:4px;padding:16px;margin-bottom:10px;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--saffron);margin-bottom:10px;letter-spacing:0.1em;">EC2 t2.micro — k3s Cluster</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <div class="arch-box box-api" style="flex:1;min-width:100px;">
+                <div class="box-title">Traefik Ingress</div>
+                <div class="box-desc">TLS · / · /api · /ws</div>
+              </div>
+              <div class="arch-box box-service" style="flex:1;min-width:100px;">
+                <div class="box-title">Tomcat Pod</div>
+                <div class="box-desc">Single image: Next.js + WAR · :8080</div>
+              </div>
+              <div class="arch-box box-data" style="flex:1;min-width:100px;">
+                <div class="box-title">Redis Pod</div>
+                <div class="box-desc">redis:7-alpine · PVC</div>
+              </div>
+            </div>
+          </div>
+          <div class="arch-box box-data">
+            <div class="box-title">RDS t3.micro — PostgreSQL 16</div>
+            <div class="box-desc">Managed DB · Private subnet · Free tier 20 GB</div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;">CI/CD</div>
+          <div class="arch-box box-api" style="margin-bottom:10px;">
+            <div class="box-title">GitHub Actions</div>
+            <div class="box-desc">OIDC → ECR Public login → docker build → push :latest + :sha → kubectl rollout</div>
+          </div>
+          <div class="arch-box box-service">
+            <div class="box-title">ECR Public</div>
+            <div class="box-desc">public.ecr.aws · 50 GB free egress · no pull rate limits · no auth for k3s</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 7. TECH STACK -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">07 —</span>
+      <h2>Tech <em>Stack</em></h2>
+    </div>
+
+    <table class="stack-table">
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Rationale</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Frontend</td><td>Next.js 14 (Static Export)</td><td>Built with <code>next export</code>, output copied into WAR's <code>webapp/</code> — served by Tomcat at <code>/</code></td></tr>
+        <tr><td>Styling</td><td>Tailwind CSS</td><td>Rapid UI, consistent design tokens</td></tr>
+        <tr><td>State</td><td>Zustand</td><td>Lightweight, works well with audio state</td></tr>
+        <tr><td>Audio</td><td>Tone.js + Web Audio</td><td>Tanpura synthesis, metronome, scheduling</td></tr>
+        <tr><td>Pitch</td><td>Pitchy (npm)</td><td>Browser autocorrelation pitch detection, no server</td></tr>
+        <tr><td>Backend</td><td>Java 21 + Spring Boot 3.3</td><td>Virtual threads (Loom), Records, sealed classes, structured concurrency</td></tr>
+        <tr><td>Packaging</td><td>WAR (Servlet 6.0)</td><td>Spring Boot WAR — Next.js static files bundled inside <code>src/main/webapp/</code></td></tr>
+        <tr><td>App Server</td><td>Tomcat 10.1 (JRE 21)</td><td>Runs inside Docker — serves both frontend (static) and backend (API) from one container</td></tr>
+        <tr><td>Build Tool</td><td>Gradle 8 (Kotlin DSL)</td><td>WAR plugin — Jib removed in favour of standard multi-stage Dockerfile</td></tr>
+        <tr><td>API Style</td><td>Spring Web MVC</td><td>Thread-per-request with virtual threads — simpler than WebFlux, same scale</td></tr>
+        <tr><td>Auth</td><td>Spring Security 6 + JJWT</td><td>JWT filter chain, Google OAuth2 Resource Server, stateless sessions</td></tr>
+        <tr><td>ORM</td><td>Spring Data JPA + Hibernate 6</td><td>JPA repositories, JPQL + native queries with text blocks</td></tr>
+        <tr><td>Migrations</td><td>Flyway</td><td>Version-controlled SQL migrations, auto-runs on Tomcat startup</td></tr>
+        <tr><td>Database</td><td>AWS RDS PostgreSQL 16</td><td>Managed DB — t3.micro free tier, 20 GB storage, Single-AZ</td></tr>
+        <tr><td>Cache</td><td>Redis 7 (K8s pod) + Lettuce</td><td>Runs as pod on same EC2, PVC for persistence, Spring Data Redis</td></tr>
+        <tr><td>Realtime</td><td>Spring WebSocket + STOMP</td><td>Built-in Spring — XP updates, streak notifications pushed to browser</td></tr>
+        <tr><td>Scheduler</td><td>Spring @Scheduled</td><td>Daily challenge cron, streak expiry — runs inside Tomcat pod</td></tr>
+        <tr><td>Containerization</td><td>Docker (multi-stage Dockerfile)</td><td>Stage 1: Node (Next.js export) → Stage 2: Gradle (WAR) → Stage 3: Tomcat runtime</td></tr>
+        <tr><td>Registry</td><td>AWS ECR Public</td><td><code>public.ecr.aws</code> — same AWS account, zero pull rate limits, 50 GB free egress, no auth needed for k3s pulls</td></tr>
+        <tr><td>Orchestration</td><td>k3s (Kubernetes)</td><td>Lightweight K8s on EC2 t2.micro — full K8s API, ~512 MB RAM overhead</td></tr>
+        <tr><td>Ingress</td><td>Traefik (k3s built-in)</td><td>Routes <code>/</code>, <code>/api</code>, <code>/ws</code> to Tomcat. TLS via cert-manager + Let's Encrypt</td></tr>
+        <tr><td>Audio Storage</td><td>AWS S3 + CloudFront</td><td>Raga audio samples only — 5 GB free. Frontend served by Tomcat, not S3</td></tr>
+        <tr><td>Email</td><td>AWS SES + Spring Mail</td><td>JavaMailSender → SES SMTP — 3,000 emails/month free from EC2</td></tr>
+        <tr><td>CI/CD</td><td>GitHub Actions + OIDC</td><td>OIDC role assumption (no stored AWS keys) → ECR Public login → docker build → push :latest + :sha → kubectl rollout restart</td></tr>
+        <tr><td>Testing</td><td>JUnit 5 + Testcontainers</td><td>Unit + integration tests, real Postgres/Redis in Docker for repo tests</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 8. BUILD TIMELINE -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">08 —</span>
+      <h2>Build <em>Timeline</em></h2>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="sprint-label">Sprint 1–2 · Weeks 1–3</div>
+        <div class="sprint-title">Foundation, Auth & AWS Setup</div>
+        <ul class="sprint-tasks">
+          <li>Spring Boot 3.3 + Java 21 scaffold (WAR packaging)</li>
+          <li>Gradle 8 WAR plugin configured</li>
+          <li>PostgreSQL + Flyway migrations</li>
+          <li>Spring Security 6 — JWT + Google OAuth2</li>
+          <li>AWS account setup + free tier budget alerts</li>
+          <li>ECR Public gallery created (<code>public.ecr.aws/&lt;alias&gt;/raagpath</code>)</li>
+          <li>GitHub Actions OIDC role configured (no stored AWS keys)</li>
+          <li>EC2 t2.micro provisioned + k3s installed</li>
+          <li>RDS PostgreSQL t3.micro provisioned (private subnet)</li>
+          <li>Multi-stage Dockerfile authored + tested locally</li>
+        </ul>
+      </div>
+      <div class="timeline-item">
+        <div class="sprint-label">Sprint 3–4 · Weeks 4–7</div>
+        <div class="sprint-title">Core Practice Modules + Containerisation</div>
+        <ul class="sprint-tasks">
+          <li>Swara Trainer UI (mic + Pitchy)</li>
+          <li>Tanpura drone (Tone.js)</li>
+          <li>Tala Metronome (Teentaal/Rupak)</li>
+          <li>PracticeService + RagaService (Java 21 Records, StructuredTaskScope)</li>
+          <li>Session POST endpoint + Hibernate persistence to RDS</li>
+          <li>Next.js <code>next export</code> bundled into WAR webapp root</li>
+          <li>Single image build verified — frontend + API both served by Tomcat</li>
+          <li>K8s manifests: Deployment (ECR Public image, no imagePullSecret), Service, ConfigMap, Secret</li>
+          <li>Redis pod + PVC manifest deployed to k3s</li>
+          <li>Traefik Ingress + cert-manager (Let's Encrypt TLS)</li>
+          <li>AWS SDK v2 — raga audio upload to S3 bucket</li>
+        </ul>
+      </div>
+      <div class="timeline-item">
+        <div class="sprint-label">Sprint 5–6 · Weeks 8–13</div>
+        <div class="sprint-title">Gamification, CI/CD & Production Hardening</div>
+        <ul class="sprint-tasks">
+          <li>GamificationService — sealed events + pattern matching</li>
+          <li>XP + level-up engine, Redis streak tracking</li>
+          <li>Badge engine + 10 launch badges</li>
+          <li>Spring WebSocket STOMP — live XP push</li>
+          <li>AWS SES setup + Spring Mail integration</li>
+          <li>GitHub Actions CI: OIDC auth → next export → gradle war → docker build → ECR Public push (:latest + :sha) → kubectl rollout</li>
+          <li>K8s liveness + readiness probes on /actuator/health</li>
+          <li>AWS CloudWatch basic monitoring + free tier alerts</li>
+          <li>Testcontainers integration tests (Postgres + Redis)</li>
+          <li>PWA service worker + mobile QA</li>
+          <li>Free tier spend review + guardrails</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- 9. PHASE 1 — 5-DAY WAR PLAN -->
+  <section class="section">
+    <div class="section-header">
+      <span class="section-num">09 —</span>
+      <h2>Phase 1 <em>War Plan</em></h2>
+    </div>
+
+    <div class="callout">
+      <strong>Context:</strong> Solo dev · Starting from scratch · 4–6 hrs/day · Tuesday → Saturday (5 days, ~25 hrs total). This is the first deployable slice of the full MVP — a real, running app on AWS by end of Saturday. Full MVP timeline remains in Section 08.
+    </div>
+
+    <!-- Scope cards -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:28px 0;">
+
+      <div style="background:rgba(26,107,74,0.08);border:1px solid rgba(26,107,74,0.3);border-radius:4px;padding:24px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--jade-light);margin-bottom:14px;">✓ In — Phase 1 Scope</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> AWS infra provisioned (EC2, RDS t3.micro, S3)</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> Spring Boot WAR + Next.js single Docker image</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> k3s on EC2 — app live at a real domain</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> JWT auth — register, login, protected routes</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> Swara Trainer — mic input, pitch detection, sur accuracy meter, tanpura drone</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> Session submit → XP awarded → persisted to RDS</li>
+          <li style="font-size:14px;color:var(--ivory-dark);display:flex;gap:10px;align-items:baseline;"><span style="color:var(--jade-light);font-size:12px;">▸</span> ECR Public + GitHub Actions CI/CD pipeline live</li>
+        </ul>
+      </div>
+
+      <div style="background:rgba(139,58,16,0.08);border:1px solid rgba(139,58,16,0.3);border-radius:4px;padding:24px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:#E8956A;margin-bottom:14px;">✗ Out — Deferred to Full MVP</div>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:8px;">
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> Tala Metronome</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> Raga of the Day</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> Streak system</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> Badge engine</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> Alankaar practice module</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> WebSocket real-time XP push</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> SES email notifications</li>
+          <li style="font-size:14px;color:var(--muted);display:flex;gap:10px;align-items:baseline;"><span style="font-size:12px;">–</span> PWA / service worker</li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Day by day timeline -->
+    <h3 style="margin-bottom:20px;">Day-by-Day Plan</h3>
+    <div class="timeline">
+
+      <div class="timeline-item">
+        <div class="sprint-label">Tuesday · Day 1 · ~5 hrs</div>
+        <div class="sprint-title">Infra + Project Scaffold</div>
+        <ul class="sprint-tasks">
+          <li>AWS: EC2 t2.micro + RDS t3.micro (PostgreSQL) + S3 bucket provisioned</li>
+          <li>k3s installed on EC2, kubeconfig saved locally</li>
+          <li>Spring Boot 3.3 + Java 21 project created (WAR packaging, Gradle)</li>
+          <li>Next.js 14 project created (static export configured)</li>
+          <li>GitHub repo + ECR Public gallery created</li>
+          <li>Multi-stage Dockerfile written + image builds locally</li>
+          <li><em>End of day goal: <code>docker run</code> serves Hello World on localhost:8080</em></li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="sprint-label">Wednesday · Day 2 · ~5 hrs</div>
+        <div class="sprint-title">Auth + Deploy Pipeline</div>
+        <ul class="sprint-tasks">
+          <li>PostgreSQL schema: users table, Flyway migration V1</li>
+          <li>Spring Security 6 — JWT register + login endpoints</li>
+          <li>Next.js — login/register pages, JWT stored in httpOnly cookie</li>
+          <li>GitHub Actions workflow: build → ECR Public push → kubectl rollout</li>
+          <li>K8s manifests: Deployment, Service, ConfigMap, Secret, Traefik Ingress</li>
+          <li>Redis pod + PVC deployed (ready for XP caching)</li>
+          <li><em>End of day goal: app live on EC2 domain, login works end-to-end</em></li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="sprint-label">Thursday · Day 3 · ~6 hrs</div>
+        <div class="sprint-title">Swara Trainer — Core</div>
+        <ul class="sprint-tasks">
+          <li>Pitchy + Web Audio API wired — mic input → live Hz detection</li>
+          <li>Hz → swara mapping (Sa Re Ga Ma Pa Dha Ni with shruti tolerance)</li>
+          <li>Tanpura drone — Tone.js, base shruti selectable (C to B)</li>
+          <li>Sur accuracy meter UI — real-time visual needle/bar</li>
+          <li>Target swara display — shows current target, lights up on hit</li>
+          <li><em>End of day goal: can sing a swara, see it detected correctly in browser</em></li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="sprint-label">Friday · Day 4 · ~5 hrs</div>
+        <div class="sprint-title">Swara Trainer — Session + XP</div>
+        <ul class="sprint-tasks">
+          <li>Practice session flow: start → timed practice → end → results screen</li>
+          <li>Accuracy % calculation (hits / total notes attempted)</li>
+          <li>Session entity + JPA repository (practice_sessions table, Flyway V2)</li>
+          <li>POST /api/sessions — saves session, calculates + awards XP</li>
+          <li>XP total persisted on user record, displayed on dashboard</li>
+          <li>Basic dashboard: user name, total XP, last session accuracy</li>
+          <li><em>End of day goal: complete a practice session, see XP increment on dashboard</em></li>
+        </ul>
+      </div>
+
+      <div class="timeline-item">
+        <div class="sprint-label">Saturday · Day 5 · ~5 hrs</div>
+        <div class="sprint-title">Polish, Deploy & Smoke Test</div>
+        <ul class="sprint-tasks">
+          <li>UI polish — consistent colours, mobile layout check, loading states</li>
+          <li>Let's Encrypt TLS via cert-manager (HTTPS on real domain)</li>
+          <li>Raga audio samples uploaded to S3 (5–10 reference clips)</li>
+          <li>End-to-end smoke test: register → login → practice → XP awarded</li>
+          <li>GitHub Actions pipeline verified: push to main → live in &lt;5 min</li>
+          <li>AWS budget alert set ($1 threshold — catches any free tier slip)</li>
+          <li><em>End of day goal: shareable HTTPS URL, full flow works on mobile</em></li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- Risk flags -->
+    <div style="margin-top:32px;background:rgba(212,160,23,0.06);border:1px solid rgba(212,160,23,0.2);border-radius:4px;padding:24px;">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;text-transform:uppercase;color:var(--gold);margin-bottom:16px;">⚠ Risk Flags — Where Days Slip</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+        <div style="font-size:13px;color:var(--ivory-dark);line-height:1.6;"><strong style="color:var(--gold);">Pitch detection feel</strong><br>Pitchy returns Hz accurately but the UX — debounce, smoothing, tolerance window — needs iteration. Don't skip this tuning on Day 3.</div>
+        <div style="font-size:13px;color:var(--ivory-dark);line-height:1.6;"><strong style="color:var(--gold);">k3s + Traefik TLS</strong><br>cert-manager on a fresh k3s install has sharp edges. Budget 1 hr for this specifically on Day 2. Do it before you need it on Day 5.</div>
+        <div style="font-size:13px;color:var(--ivory-dark);line-height:1.6;"><strong style="color:var(--gold);">RDS connectivity</strong><br>Security group rules between EC2 and RDS catch most people. Verify the Spring Boot → RDS connection on Day 1 before writing any app code.</div>
+        <div style="font-size:13px;color:var(--ivory-dark);line-height:1.6;"><strong style="color:var(--gold);">Mobile mic access</strong><br>Web Audio API on iOS Safari requires a user gesture before mic access. Test on mobile on Day 4, not Day 5.</div>
+      </div>
+    </div>
+
+  </section>
+
+  <hr class="divider">
+
+  <!-- FOOTER -->
+  <footer style="text-align:center;padding:32px 0;opacity:0.4;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.2em;color:var(--muted);">
+    RAAGPATH MVP — ARCHITECTURE v3.2 · SINGLE IMAGE · ECR PUBLIC · OIDC CI/CD ✦ CONFIDENTIAL
+  </footer>
+
+</div>
+</body>
+</html>

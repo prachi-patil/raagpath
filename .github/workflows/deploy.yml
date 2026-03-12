@@ -67,9 +67,9 @@ jobs:
       # ── 5. Deploy to EC2 via SSH ─────────────────────────────────────────────
       - name: Deploy to EC2
         env:
-          IMAGE_TAG:            ${{ github.sha }}
-          DB_PASSWORD:          ${{ secrets.DB_PASSWORD }}
-          JWT_SECRET:           ${{ secrets.JWT_SECRET }}
+          IMAGE_TAG:             ${{ github.sha }}
+          DB_PASSWORD:           ${{ secrets.DB_PASSWORD }}
+          JWT_SECRET:            ${{ secrets.JWT_SECRET }}
           SPRING_DATASOURCE_URL: ${{ secrets.SPRING_DATASOURCE_URL }}
         run: |
           # Write SSH key to temp file
@@ -78,37 +78,38 @@ jobs:
 
           ssh -o StrictHostKeyChecking=no \
               -i /tmp/raagpath-key.pem \
-              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
-              "
-                set -e
-                # Pull latest image
-                aws ecr-public get-login-password --region us-east-1 | \
-                  docker login --username AWS --password-stdin public.ecr.aws
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+            set -e
 
-                docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+            # ── Pull latest image from ECR Public ──────────────────────────
+            aws ecr-public get-login-password --region us-east-1 | \
+              docker login --username AWS --password-stdin public.ecr.aws
 
-                # Gracefully stop old container (if running)
-                docker stop raagpath-app 2>/dev/null || true
-                docker rm   raagpath-app 2>/dev/null || true
+            docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
-                # Start new container
-                docker run -d \
-                  --name raagpath-app \
-                  --restart unless-stopped \
-                  -p 8080:8080 \
-                  -e SPRING_DATASOURCE_URL='${SPRING_DATASOURCE_URL}' \
-                  -e DB_USERNAME=raagpath \
-                  -e DB_PASSWORD='${DB_PASSWORD}' \
-                  -e JWT_SECRET='${JWT_SECRET}' \
-                  -e REDIS_HOST=localhost \
-                  -e REDIS_PORT=6379 \
-                  -e SPRING_PROFILES_ACTIVE=prod \
-                  $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+            # Tag as :latest so docker-compose.yml picks it up
+            docker tag ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
+                       ${ECR_REGISTRY}/${IMAGE_NAME}:latest
 
-                # Wait for health check
-                sleep 10
-                curl -sf http://localhost:8080/api/health || exit 1
-                echo 'Deployment successful!'
-              "
+            # ── Write .env file on EC2 (never stored in git) ────────────────
+            cat > /home/ec2-user/raagpath/.env << EOF
+          SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+          DB_USERNAME=raagpath
+          DB_PASSWORD=${DB_PASSWORD}
+          JWT_SECRET=${JWT_SECRET}
+          EOF
+
+            # ── Restart app via docker compose ───────────────────────────────
+            # Redis keeps running (only app container restarts)
+            cd /home/ec2-user/raagpath
+            docker compose pull app        # already pulled above, is a no-op
+            docker compose up -d --no-deps app
+
+            # ── Health check ─────────────────────────────────────────────────
+            echo "Waiting for app to be healthy..."
+            sleep 15
+            curl -sf http://localhost:8080/api/health || exit 1
+            echo "Deployment successful!"
+          ENDSSH
 
           rm -f /tmp/raagpath-key.pem
