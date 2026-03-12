@@ -76,40 +76,35 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/raagpath-key.pem
           chmod 600 /tmp/raagpath-key.pem
 
-          ssh -o StrictHostKeyChecking=no \
-              -i /tmp/raagpath-key.pem \
-              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'ENDSSH'
+          SSH_CMD="ssh -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
+
+          # ── Create app directory on EC2 ───────────────────────────────────
+          $SSH_CMD "mkdir -p /home/ec2-user/raagpath"
+
+          # ── Write .env file via SCP (avoids heredoc nesting issues) ───────
+          # Variables are expanded here on the GitHub runner — never touch EC2 env
+          cat > /tmp/raagpath.env << EOF
+SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
+DB_USERNAME=raagpath
+DB_PASSWORD=${DB_PASSWORD}
+JWT_SECRET=${JWT_SECRET}
+EOF
+          scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
+            /tmp/raagpath.env \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/raagpath/.env
+
+          # ── Pull image (ECR Public = no login needed) and restart ─────────
+          $SSH_CMD "
             set -e
-
-            # ── Pull latest image from ECR Public ──────────────────────────
-            aws ecr-public get-login-password --region us-east-1 | \
-              docker login --username AWS --password-stdin public.ecr.aws
-
-            docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-
-            # Tag as :latest so docker-compose.yml picks it up
-            docker tag ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} \
-                       ${ECR_REGISTRY}/${IMAGE_NAME}:latest
-
-            # ── Write .env file on EC2 (never stored in git) ────────────────
-            cat > /home/ec2-user/raagpath/.env << EOF
-          SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
-          DB_USERNAME=raagpath
-          DB_PASSWORD=${DB_PASSWORD}
-          JWT_SECRET=${JWT_SECRET}
-          EOF
-
-            # ── Restart app via docker compose ───────────────────────────────
-            # Redis keeps running (only app container restarts)
+            docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
+            docker tag  $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
+                        $ECR_REGISTRY/$IMAGE_NAME:latest
             cd /home/ec2-user/raagpath
-            docker compose pull app        # already pulled above, is a no-op
-            docker compose up -d --no-deps app
-
-            # ── Health check ─────────────────────────────────────────────────
-            echo "Waiting for app to be healthy..."
-            sleep 15
+            docker compose up -d
+            echo 'Waiting for app to be healthy...'
+            sleep 20
             curl -sf http://localhost:8080/api/health || exit 1
-            echo "Deployment successful!"
-          ENDSSH
+            echo 'Deployment successful!'
+          "
 
-          rm -f /tmp/raagpath-key.pem
+          rm -f /tmp/raagpath-key.pem /tmp/raagpath.env
