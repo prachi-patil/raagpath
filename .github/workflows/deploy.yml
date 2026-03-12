@@ -81,30 +81,41 @@ jobs:
           # ── Create app directory on EC2 ───────────────────────────────────
           $SSH_CMD "mkdir -p /home/ec2-user/raagpath"
 
-          # ── Write .env file via SCP (avoids heredoc nesting issues) ───────
-          # Variables are expanded here on the GitHub runner — never touch EC2 env
-          cat > /tmp/raagpath.env << EOF
-SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}
-DB_USERNAME=raagpath
-DB_PASSWORD=${DB_PASSWORD}
-JWT_SECRET=${JWT_SECRET}
-EOF
+          # ── Write .env file via SCP ───────────────────────────────────────
+          # Use grouped echos — heredocs break YAML indentation rules
+          {
+            echo "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}"
+            echo "DB_USERNAME=raagpath"
+            echo "DB_PASSWORD=${DB_PASSWORD}"
+            echo "JWT_SECRET=${JWT_SECRET}"
+          } > /tmp/raagpath.env
+
+          # SCP both docker-compose.yml and .env to EC2
           scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
             /tmp/raagpath.env \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/raagpath/.env
+          scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
+            docker-compose.yml \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/raagpath/docker-compose.yml
 
           # ── Pull image (ECR Public = no login needed) and restart ─────────
           $SSH_CMD "
             set -e
             docker pull $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG
-            docker tag  $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG \
-                        $ECR_REGISTRY/$IMAGE_NAME:latest
+            docker tag  $ECR_REGISTRY/$IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$IMAGE_NAME:latest
             cd /home/ec2-user/raagpath
-            docker compose up -d
+
+            # --force-recreate ensures new image is used even if tag name unchanged
+            docker compose up -d --force-recreate --remove-orphans
+
+            # Retry health check for up to 60s (cold start on t2.micro can be slow)
             echo 'Waiting for app to be healthy...'
-            sleep 20
-            curl -sf http://localhost:8080/api/health || exit 1
-            echo 'Deployment successful!'
+            for i in \$(seq 1 12); do
+              curl -sf http://localhost:8080/api/health && echo 'Deployment successful!' && exit 0
+              echo \"Attempt \$i/12 — retrying in 5s...\"
+              sleep 5
+            done
+            echo 'Health check timed out after 60s' && exit 1
           "
 
           rm -f /tmp/raagpath-key.pem /tmp/raagpath.env
