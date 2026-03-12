@@ -18,14 +18,12 @@ import { useRouter } from 'next/navigation';
 
 import { isLoggedIn }                           from '@/lib/auth';
 import { PitchEngine }                          from '@/lib/pitch';
-import { TanpuraEngine }                        from '@/lib/tanpura';
-import { detectSwara, SHRUTI_NOTES }            from '@/lib/swara';
+import { TanpuraEngine, VOL_DEFAULT }           from '@/lib/tanpura';
+import { detectSwara, SHRUTI_NOTES, SWARAS }    from '@/lib/swara';
 import type { Swara, ShrutiNote }               from '@/lib/swara';
 import { SurMeter }                             from '@/components/SurMeter';
 import { SwaraDisplay }                         from '@/components/SwaraDisplay';
 
-// The swara the user is practising in Day 3 — expanded to a sequence in Day 4
-const TARGET: Swara   = 'Sa';
 const PITCH_TOLERANCE = 20; // ±20 cents = on pitch
 
 export default function PracticePage() {
@@ -38,8 +36,10 @@ export default function PracticePage() {
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [shruti,     setShruti]     = useState<ShrutiNote>('C');
+  const [target,     setTarget]     = useState<Swara>('Sa');
   const [listening,  setListening]  = useState(false);
   const [tanpuraOn,  setTanpuraOn]  = useState(false);
+  const [tanpuraVol, setTanpuraVol] = useState(VOL_DEFAULT);
   const [detectedHz, setDetectedHz] = useState<number | null>(null);
   const [micError,   setMicError]   = useState('');
 
@@ -58,7 +58,7 @@ export default function PracticePage() {
   // ── derived values ───────────────────────────────────────────────────────────
   const match      = detectedHz !== null ? detectSwara(detectedHz, shruti) : null;
   const isOnPitch  = match !== null
-    && match.swara === TARGET
+    && match.swara === target
     && Math.abs(match.cents) <= PITCH_TOLERANCE;
 
   // ── mic toggle ───────────────────────────────────────────────────────────────
@@ -99,19 +99,25 @@ export default function PracticePage() {
       tanpuraRef.current.stop();
       setTanpuraOn(false);
     } else {
-      await tanpuraRef.current.start(shruti);
+      await tanpuraRef.current.start(shruti, tanpuraVol);
       setTanpuraOn(true);
     }
-  }, [tanpuraOn, shruti]);
+  }, [tanpuraOn, shruti, tanpuraVol]);
+
+  // ── tanpura volume — live update, no restart needed ──────────────────────────
+  const handleVolumeChange = useCallback((pct: number) => {
+    setTanpuraVol(pct);
+    tanpuraRef.current?.setVolume(pct);
+  }, []);
 
   // ── shruti change: restart tanpura if it was playing ─────────────────────────
   const handleShrutiChange = useCallback(async (note: ShrutiNote) => {
     setShruti(note);
     if (tanpuraOn && tanpuraRef.current) {
       tanpuraRef.current.stop();
-      await tanpuraRef.current.start(note);
+      await tanpuraRef.current.start(note, tanpuraVol);
     }
-  }, [tanpuraOn]);
+  }, [tanpuraOn, tanpuraVol]);
 
   // ── render ───────────────────────────────────────────────────────────────────
   return (
@@ -153,24 +159,63 @@ export default function PracticePage() {
           </div>
         </div>
 
+        {/* ── Target Swara selector ── */}
+        <div className="bg-white/5 rounded-2xl p-4">
+          <p className="text-white/40 text-xs uppercase tracking-widest mb-3">
+            Target Swara
+          </p>
+          <div className="grid grid-cols-6 gap-1.5">
+            {SWARAS.map(swara => (
+              <button
+                key={swara}
+                onClick={() => setTarget(swara)}
+                className={`
+                  py-2 rounded-lg text-sm font-semibold transition
+                  ${target === swara
+                    ? 'bg-saffron text-white shadow'
+                    : 'bg-white/10 text-white/60 hover:bg-white/20'}
+                `}
+              >
+                {swara}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* ── Tanpura ── */}
-        <button
-          onClick={toggleTanpura}
-          className={`
-            w-full py-3 rounded-xl font-semibold transition text-sm
-            ${tanpuraOn
-              ? 'bg-indigo-500/80 text-white hover:bg-indigo-500/90'
-              : 'bg-white/10 text-white/70 hover:bg-white/20'}
-          `}
-        >
-          {tanpuraOn ? '🎵 Tanpura Playing — Tap to Stop' : '🎵 Start Tanpura Drone'}
-        </button>
+        <div className="bg-white/5 rounded-2xl p-4 space-y-3">
+          <button
+            onClick={toggleTanpura}
+            className={`
+              w-full py-3 rounded-xl font-semibold transition text-sm
+              ${tanpuraOn
+                ? 'bg-indigo-500/80 text-white hover:bg-indigo-500/90'
+                : 'bg-white/10 text-white/70 hover:bg-white/20'}
+            `}
+          >
+            {tanpuraOn ? '🎵 Tanpura Playing — Tap to Stop' : '🎵 Start Tanpura Drone'}
+          </button>
+
+          {/* Volume rocker — always visible so user can set before starting */}
+          <div className="flex items-center gap-3">
+            <span className="text-white/40 text-lg select-none">🔈</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={tanpuraVol}
+              onChange={e => handleVolumeChange(Number(e.target.value))}
+              className="flex-1 accent-saffron h-1.5 rounded-full cursor-pointer"
+            />
+            <span className="text-white/40 text-lg select-none">🔊</span>
+          </div>
+        </div>
 
         {/* ── Swara display ── */}
         <div className="bg-white/5 rounded-2xl p-6">
           <SwaraDisplay
             detected={match?.swara ?? null}
-            target={TARGET}
+            target={target}
             isOnPitch={isOnPitch}
           />
         </div>
@@ -205,7 +250,7 @@ export default function PracticePage() {
         </button>
 
         <p className="text-white/25 text-xs text-center pb-4">
-          Sing <span className="text-saffron font-semibold">Sa</span> in shruti{' '}
+          Sing <span className="text-saffron font-semibold">{target}</span> in shruti{' '}
           <span className="text-saffron font-semibold">{shruti}</span> — hold
           steady and watch the meter
         </p>
