@@ -76,8 +76,19 @@ export default function PracticePage() {
       await engine.start();
       pitchRef.current = engine;
       setListening(true);
-    } catch {
-      setMicError('Microphone access denied — please allow mic access and try again.');
+    } catch (err: unknown) {
+      const name = err instanceof DOMException ? err.name : '';
+      if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+        setMicError('Microphone permission denied — click the 🔒 icon in the address bar and allow microphone access.');
+      } else if (name === 'SecurityError' || !window.isSecureContext) {
+        setMicError('Microphone requires HTTPS. Please access this page via https:// — not http://');
+      } else if (name === 'NotFoundError') {
+        setMicError('No microphone detected — please connect a mic and try again.');
+      } else if (name === 'NotReadableError' || name === 'TrackStartError') {
+        setMicError('Microphone is in use by another app — close it and try again.');
+      } else {
+        setMicError(`Microphone error: ${name || String(err)}`);
+      }
     }
   }, [listening]);
 
