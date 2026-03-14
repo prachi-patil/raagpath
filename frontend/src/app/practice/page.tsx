@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-import { isLoggedIn }                           from '@/lib/auth';
+// isLoggedIn import removed — no auth guard in username-based flow
 import { PitchEngine }                          from '@/lib/pitch';
 import { TanpuraEngine, VOL_DEFAULT }           from '@/lib/tanpura';
 import { detectSwara, SHRUTI_NOTES, SWARAS }    from '@/lib/swara';
@@ -28,11 +28,6 @@ const PITCH_TOLERANCE = 20; // ±20 cents = on pitch
 
 export default function PracticePage() {
   const router = useRouter();
-
-  // ── auth guard ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!isLoggedIn()) router.replace('/login');
-  }, [router]);
 
   // ── UI state ────────────────────────────────────────────────────────────────
   const [shruti,     setShruti]     = useState<ShrutiNote>('C');

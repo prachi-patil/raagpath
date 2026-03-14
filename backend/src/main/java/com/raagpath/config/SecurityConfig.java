@@ -31,6 +31,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 // Health check — always public
                 .requestMatchers("/api/health").permitAll()
+                // Game endpoints — public (username-based, no JWT)
+                .requestMatchers("/api/players/**").permitAll()
+                .requestMatchers("/api/game/**").permitAll()
                 // All other /api/** requires a valid JWT
                 .requestMatchers("/api/**").authenticated()
                 // Static files (Next.js export) — always public
