@@ -85,3 +85,14 @@ resource "aws_instance" "app" {
     Name = "${var.project}-server"
   }
 }
+
+# ── Elastic IP — static IP that survives stop/start ───────────────────────────
+
+resource "aws_eip" "app" {
+  instance = aws_instance.app.id
+  domain   = "vpc"
+
+  tags = {
+    Name = "${var.project}-eip"
+  }
+}

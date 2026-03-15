@@ -112,6 +112,9 @@ jobs:
             docker compose up -d --force-recreate --remove-orphans
 
             # ── Nginx + firewalld setup (idempotent, non-fatal) ──────────────
+            # Disable Caddy if present — it squats port 80 and breaks Nginx
+            sudo systemctl stop    caddy 2>/dev/null || true
+            sudo systemctl disable caddy 2>/dev/null || true
             sudo dnf install -y nginx           > /dev/null 2>&1 || true
             sudo cp /tmp/raagpath-nginx.conf /etc/nginx/conf.d/raagpath.conf 2>/dev/null || true
             sudo systemctl enable nginx                                        2>/dev/null || true

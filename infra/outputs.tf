@@ -1,6 +1,6 @@
 output "ec2_public_ip" {
-  description = "Public IP — use this for your domain's A record"
-  value       = aws_instance.app.public_ip
+  description = "Elastic IP — static, survives stop/start. Use for EC2_HOST secret + domain A record."
+  value       = aws_eip.app.public_ip
 }
 
 output "ec2_public_dns" {
@@ -10,7 +10,7 @@ output "ec2_public_dns" {
 
 output "ssh_command" {
   description = "Ready-to-run SSH command"
-  value       = "ssh -i ~/.ssh/${var.key_name}.pem ec2-user@${aws_instance.app.public_ip}"
+  value       = "ssh -i ~/.ssh/${var.key_name}.pem ec2-user@${aws_eip.app.public_ip}"
 }
 
 output "rds_endpoint" {
