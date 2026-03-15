@@ -16,8 +16,9 @@ variable "key_name" {
 }
 
 variable "allowed_ssh_cidr" {
-  description = "Your public IP in CIDR notation for SSH access (e.g. 1.2.3.4/32)"
+  description = "CIDR allowed for SSH. Default open (key pair is the real security)."
   type        = string
+  default     = "0.0.0.0/0"
 }
 
 variable "db_username" {
