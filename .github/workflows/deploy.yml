@@ -76,13 +76,29 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" > /tmp/raagpath-key.pem
           chmod 600 /tmp/raagpath-key.pem
 
+          # ── Temporarily open SSH from this runner's IP ────────────────────
+          # The EC2 SG restricts port 22 to a specific CIDR; dynamically add
+          # the current runner IP so SSH can connect, then revoke on exit.
+          SG_ID="sg-0d531e62149120f24"
+          EC2_REGION="ap-south-1"
+          RUNNER_IP=$(curl -sf https://checkip.amazonaws.com)
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" --protocol tcp --port 22 \
+            --cidr "${RUNNER_IP}/32" --region "$EC2_REGION" 2>/dev/null || true
+
+          # Revoke runner's SSH access + delete temp files on any exit
+          trap "aws ec2 revoke-security-group-ingress \
+            --group-id \"$SG_ID\" --protocol tcp --port 22 \
+            --cidr \"${RUNNER_IP}/32\" --region \"$EC2_REGION\" \
+            > /dev/null 2>&1 || true; \
+            rm -f /tmp/raagpath-key.pem /tmp/raagpath.env" EXIT
+
           SSH_CMD="ssh -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
 
           # ── Create app directory on EC2 ───────────────────────────────────
           $SSH_CMD "mkdir -p /home/ec2-user/raagpath"
 
           # ── Write .env file via SCP ───────────────────────────────────────
-          # Use grouped echos — heredocs break YAML indentation rules
           {
             echo "SPRING_DATASOURCE_URL=${SPRING_DATASOURCE_URL}"
             echo "DB_USERNAME=raagpath"
@@ -130,5 +146,4 @@ jobs:
             done
             echo 'Health check timed out after 60s' && exit 1
           "
-
-          rm -f /tmp/raagpath-key.pem /tmp/raagpath.env
+          # trap EXIT handles cleanup
