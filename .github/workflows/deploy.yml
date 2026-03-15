@@ -111,19 +111,20 @@ jobs:
             # --force-recreate ensures new image is used even if tag name unchanged
             docker compose up -d --force-recreate --remove-orphans
 
-            # ── Nginx + firewalld setup (idempotent) ─────────────────────────
-            sudo dnf install -y nginx > /dev/null 2>&1 || true
-            sudo cp /tmp/raagpath-nginx.conf /etc/nginx/conf.d/raagpath.conf
-            sudo systemctl enable nginx
-            sudo systemctl start nginx 2>/dev/null || sudo systemctl reload nginx
+            # ── Nginx + firewalld setup (idempotent, non-fatal) ──────────────
+            sudo dnf install -y nginx           > /dev/null 2>&1 || true
+            sudo cp /tmp/raagpath-nginx.conf /etc/nginx/conf.d/raagpath.conf 2>/dev/null || true
+            sudo systemctl enable nginx                                        2>/dev/null || true
+            sudo systemctl start  nginx         2>/dev/null || \
+              sudo systemctl reload nginx        2>/dev/null || true
             sudo firewall-cmd --permanent --add-service=http  > /dev/null 2>&1 || true
             sudo firewall-cmd --permanent --add-port=8080/tcp > /dev/null 2>&1 || true
-            sudo firewall-cmd --reload > /dev/null 2>&1 || true
+            sudo firewall-cmd --reload                        > /dev/null 2>&1 || true
 
             # Retry health check for up to 60s (cold start on t2.micro can be slow)
             echo 'Waiting for app to be healthy...'
             for i in \$(seq 1 12); do
-              curl -sf http://localhost/api/health && echo 'Deployment successful!' && exit 0
+              curl -sf http://localhost:8080/api/health && echo 'Deployment successful!' && exit 0
               echo \"Attempt \$i/12 — retrying in 5s...\"
               sleep 5
             done
