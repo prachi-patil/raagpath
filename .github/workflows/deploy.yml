@@ -90,13 +90,16 @@ jobs:
             echo "JWT_SECRET=${JWT_SECRET}"
           } > /tmp/raagpath.env
 
-          # SCP both docker-compose.yml and .env to EC2
+          # SCP .env, docker-compose.yml, and nginx config to EC2
           scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
             /tmp/raagpath.env \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/raagpath/.env
           scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
             docker-compose.yml \
             ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/raagpath/docker-compose.yml
+          scp -o StrictHostKeyChecking=no -i /tmp/raagpath-key.pem \
+            infra/nginx/raagpath.conf \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/tmp/raagpath-nginx.conf
 
           # ── Pull image (ECR Public = no login needed) and restart ─────────
           $SSH_CMD "
@@ -108,10 +111,19 @@ jobs:
             # --force-recreate ensures new image is used even if tag name unchanged
             docker compose up -d --force-recreate --remove-orphans
 
+            # ── Nginx + firewalld setup (idempotent) ─────────────────────────
+            sudo dnf install -y nginx > /dev/null 2>&1 || true
+            sudo cp /tmp/raagpath-nginx.conf /etc/nginx/conf.d/raagpath.conf
+            sudo systemctl enable nginx
+            sudo systemctl start nginx 2>/dev/null || sudo systemctl reload nginx
+            sudo firewall-cmd --permanent --add-service=http  > /dev/null 2>&1 || true
+            sudo firewall-cmd --permanent --add-port=8080/tcp > /dev/null 2>&1 || true
+            sudo firewall-cmd --reload > /dev/null 2>&1 || true
+
             # Retry health check for up to 60s (cold start on t2.micro can be slow)
             echo 'Waiting for app to be healthy...'
             for i in \$(seq 1 12); do
-              curl -sf http://localhost:8080/api/health && echo 'Deployment successful!' && exit 0
+              curl -sf http://localhost/api/health && echo 'Deployment successful!' && exit 0
               echo \"Attempt \$i/12 — retrying in 5s...\"
               sleep 5
             done
