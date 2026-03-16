@@ -11,7 +11,7 @@
 // Progression: 5 consecutive firstAttemptCorrect answers required to pass
 
 import { useCallback, useRef, useState } from 'react';
-import type { Swara, ShrutiNote } from './swara';
+import { SHUDDHA as _SHUDDHA, type Swara, type ShrutiNote } from './swara';
 import { SwaraPlayerEngine } from './swaraPlayer';
 import { apiFetch } from './api';
 
@@ -24,18 +24,16 @@ export interface LevelConfig {
   description: string;
 }
 
-export const SHUDDHA: readonly Swara[] = ['Sa', 'Re', 'Ga', 'Ma', 'Pa', 'Dha', 'Ni'];
+export const SHUDDHA: readonly Swara[] = _SHUDDHA;
 export const ALL12:   readonly Swara[] = [
   'Sa', 're', 'Re', 'ga', 'Ga', 'Ma', 'ma', 'Pa', 'dha', 'Dha', 'ni', 'Ni',
 ];
 
 export const LEVEL_CONFIGS: LevelConfig[] = [
-  { level: 1, swaraPool: ['Sa', 'Pa'],                   sequenceLen: 1, description: 'Sa & Pa (2 choices)' },
-  { level: 2, swaraPool: ['Sa', 'Re', 'Pa', 'Dha'],      sequenceLen: 1, description: '4 shuddha swaras' },
-  { level: 3, swaraPool: SHUDDHA,                        sequenceLen: 1, description: 'All 7 shuddha swaras' },
-  { level: 4, swaraPool: ALL12,                          sequenceLen: 1, description: 'All 12 swaras (komal + tivra)' },
-  { level: 5, swaraPool: SHUDDHA,                        sequenceLen: 2, description: '2-swara sequences (7 shuddha)' },
-  { level: 6, swaraPool: SHUDDHA,                        sequenceLen: 3, description: '3-swara sequences (7 shuddha)' },
+  { level: 1, swaraPool: SHUDDHA, sequenceLen: 1, description: 'All 7 shuddha swaras' },
+  { level: 2, swaraPool: ALL12,   sequenceLen: 1, description: 'All 12 swaras (komal + tivra)' },
+  { level: 3, swaraPool: SHUDDHA, sequenceLen: 2, description: '2-swara sequences (7 shuddha)' },
+  { level: 4, swaraPool: SHUDDHA, sequenceLen: 3, description: '3-swara sequences (7 shuddha)' },
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────

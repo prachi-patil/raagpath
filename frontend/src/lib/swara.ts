@@ -7,6 +7,9 @@ export const SWARAS = [
 ] as const;
 export type Swara = (typeof SWARAS)[number];
 
+// Natural (shuddha) swaras only — used for octave reference playback
+export const SHUDDHA: readonly Swara[] = ['Sa', 'Re', 'Ga', 'Ma', 'Pa', 'Dha', 'Ni'];
+
 // ─── Shruti (tonic) definitions ───────────────────────────────────────────────
 export const SHRUTI_NOTES = [
   'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
