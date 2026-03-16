@@ -98,14 +98,15 @@ function computeRoundScore(attempts: number): number {
   return Math.max(10, 100 - (attempts - 1) * 30);
 }
 
-function pickRandom<T>(pool: readonly T[]): T {
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
+/** Fisher-Yates partial shuffle — picks `len` unique items from `pool`. */
 function pickSequence<T>(pool: readonly T[], len: number): T[] {
-  const seq: T[] = [];
-  for (let i = 0; i < len; i++) seq.push(pickRandom(pool));
-  return seq;
+  const arr = [...pool];
+  const end = Math.min(len, arr.length);
+  for (let i = 0; i < end; i++) {
+    const j = i + Math.floor(Math.random() * (arr.length - i));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, end);
 }
 
 function arraysEqual(a: string[], b: string[]): boolean {
@@ -284,6 +285,11 @@ export function useGameSession(): GameSessionState {
     if (engine.playing) return;
     const prev = roundRef.current;
     if (!prev) return;
+
+    // Brief silence so any reverb tail from a just-stopped octave fully clears
+    // before the question tone starts. Also gives the synth release time to finish.
+    await new Promise(r => setTimeout(r, 200));
+    if (engine.playing) return;  // another playback started during the pause
 
     const config = LEVEL_CONFIGS[selectedLevelRef.current - 1];
     setPhase('playing_tone');

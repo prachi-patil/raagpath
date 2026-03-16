@@ -38,11 +38,14 @@ const NOTE_DUR = '1n';     // 1 second per note (half-note at default 120 bpm)
 const NOTE_GAP_MS = 800;   // gap between notes in a sequence
 
 export class SwaraPlayerEngine {
-  private Tone:   typeof import('tone') | null   = null;
-  private synth:  import('tone').Synth | null    = null;
-  private filter: import('tone').Filter | null   = null;
-  private reverb: import('tone').Reverb | null   = null;
+  private Tone:    typeof import('tone') | null   = null;
+  private synth:   import('tone').Synth | null    = null;
+  private filter:  import('tone').Filter | null   = null;
+  private reverb:  import('tone').Reverb | null   = null;
   private _playing = false;
+  // Each call to play* gets a unique token; stopPlayback() bumps it so any
+  // in-flight loop detects the mismatch and exits without firing more notes.
+  private playId   = 0;
 
   // ── Initialise (call inside a button click handler) ──────────────────────
   async ensureInitialised(): Promise<void> {
@@ -96,33 +99,37 @@ export class SwaraPlayerEngine {
   async playSwara(swara: Swara, shruti: ShrutiNote): Promise<void> {
     if (this._playing || !this.synth || !this.Tone) return;
     this._playing = true;
+    const myId = ++this.playId;
     try {
       const hz = swaraToHz(swara, shruti);
       this.synth.triggerAttackRelease(hz, NOTE_DUR);
       // Wait for duration + release tail
       await delay(1200);
     } finally {
-      this._playing = false;
+      // Only clear _playing if we are still the active playback
+      if (this.playId === myId) this._playing = false;
     }
   }
 
   /**
    * Play a sequence of swaras with a gap between them.
-   * Used for multi-swara levels (L5/L6) and the full octave playback.
+   * Used for multi-swara levels and the full octave playback.
    * Resolves after the last note's tail finishes.
    */
   async playSequence(swaras: readonly Swara[], shruti: ShrutiNote): Promise<void> {
     if (this._playing || !this.synth || !this.Tone) return;
     this._playing = true;
+    const myId = ++this.playId;
     try {
       for (const swara of swaras) {
-        if (!this._playing) break;              // allow early stop
+        // Exit if stopPlayback() was called (playId bumped) OR _playing cleared
+        if (!this._playing || this.playId !== myId) break;
         const hz = swaraToHz(swara, shruti);
         this.synth.triggerAttackRelease(hz, NOTE_DUR);
         await delay(1200 + NOTE_GAP_MS);
       }
     } finally {
-      this._playing = false;
+      if (this.playId === myId) this._playing = false;
     }
   }
 
@@ -137,6 +144,7 @@ export class SwaraPlayerEngine {
 
   /** Stop any currently playing sequence immediately. */
   stopPlayback(): void {
+    this.playId++;       // invalidate any in-flight playSwara / playSequence loop
     this._playing = false;
     this.synth?.triggerRelease();
   }
