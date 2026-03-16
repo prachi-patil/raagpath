@@ -1,9 +1,10 @@
 // ─── Swara Player Engine ──────────────────────────────────────────────────────
 // Synthesises single swara tones for the Swara Recognition Game.
-// Mimics a harmonium reed: sawtooth oscillator → lowpass filter → light reverb.
+// Simulates a harmonium reed: custom partials + chorus (multiple reeds per note)
+// + lowpass filter + dry reverb.
 //
 // Signal chain:
-//   Synth (sawtooth) → Lowpass Filter (1800 Hz) → Reverb (1.0s, wet 0.10) → Destination
+//   Synth (custom partials) → Chorus → Lowpass Filter (2000 Hz) → Reverb (dry) → Destination
 //
 // IMPORTANT: ensureInitialised() MUST be called inside a user-gesture handler
 // (e.g. button click). AudioContext cannot be created before a gesture.
@@ -36,11 +37,17 @@ function swaraToHz(swara: Swara, shruti: ShrutiNote): number {
 const NOTE_DUR = '1n';     // 1 second per note (half-note at default 120 bpm)
 const NOTE_GAP_MS = 800;   // gap between notes in a sequence
 
+// Harmonium reed harmonic series: strong fundamental, overtones tapering off
+// faster than sawtooth — matches the mellower, woody quality of a real reed.
+// partials[i] = relative amplitude of the (i+1)th harmonic
+const HARMONIUM_PARTIALS = [1.0, 0.6, 0.4, 0.25, 0.18, 0.12, 0.08, 0.05];
+
 export class SwaraPlayerEngine {
-  private Tone:   typeof import('tone') | null  = null;
-  private synth:  import('tone').Synth | null   = null;
-  private filter: import('tone').Filter | null  = null;
-  private reverb: import('tone').Reverb | null  = null;
+  private Tone:   typeof import('tone') | null   = null;
+  private synth:  import('tone').Synth | null    = null;
+  private chorus: import('tone').Chorus | null   = null;
+  private filter: import('tone').Filter | null   = null;
+  private reverb: import('tone').Reverb | null   = null;
   private _playing = false;
 
   // ── Initialise (call inside a button click handler) ──────────────────────
@@ -52,27 +59,39 @@ export class SwaraPlayerEngine {
     await Tone.start();                         // resume AudioContext
 
     if (!this.reverb) {
-      this.reverb = new Tone.Reverb({ decay: 1.0, wet: 0.10, preDelay: 0.01 });
+      // Very dry — harmoniums are close, direct instruments
+      this.reverb = new Tone.Reverb({ decay: 0.8, wet: 0.07, preDelay: 0.01 });
       await this.reverb.generate();
       this.reverb.toDestination();
     }
 
     if (!this.filter) {
-      this.filter = new Tone.Filter({ frequency: 1800, type: 'lowpass', rolloff: -24 });
+      // Lowpass rolls off harsh upper harmonics while keeping warmth
+      this.filter = new Tone.Filter({ frequency: 2000, type: 'lowpass', rolloff: -12 });
       this.filter.connect(this.reverb);
+    }
+
+    if (!this.chorus) {
+      // Harmoniums have 2–3 slightly detuned reeds per note — chorus recreates this
+      this.chorus = new Tone.Chorus({ frequency: 2.5, delayTime: 2, depth: 0.25, wet: 0.45 });
+      this.chorus.start();
+      this.chorus.connect(this.filter);
     }
 
     if (!this.synth) {
       this.synth = new Tone.Synth({
-        oscillator: { type: 'sawtooth' },       // reed-like harmonics — harmonium timbre
+        oscillator: {
+          type: 'custom' as const,
+          partials: HARMONIUM_PARTIALS,         // reed-specific harmonic series
+        },
         envelope: {
           attack:  0.04,   // reed takes a moment to speak
-          decay:   0.1,
-          sustain: 0.85,   // held steady while note plays
-          release: 0.3,    // stops quickly when bellows stop
+          decay:   0.05,   // quick settle into steady tone
+          sustain: 0.90,   // held steady while bellows push air
+          release: 0.25,   // stops promptly when key released
         },
-        volume: -8,
-      }).connect(this.filter);
+        volume: -6,
+      }).connect(this.chorus);
     }
   }
 
@@ -134,13 +153,15 @@ export class SwaraPlayerEngine {
   /** Dispose all Tone.js resources. Call when leaving the game page. */
   dispose(): void {
     this.stopPlayback();
-    try { this.synth?.dispose(); }  catch { /* already disposed */ }
-    try { this.filter?.dispose(); } catch { /* already disposed */ }
-    try { this.reverb?.dispose(); } catch { /* already disposed */ }
-    this.synth  = null;
-    this.filter = null;
-    this.reverb = null;
-    this.Tone   = null;
+    try { this.synth?.dispose(); }   catch { /* already disposed */ }
+    try { this.chorus?.dispose(); }  catch { /* already disposed */ }
+    try { this.filter?.dispose(); }  catch { /* already disposed */ }
+    try { this.reverb?.dispose(); }  catch { /* already disposed */ }
+    this.synth   = null;
+    this.chorus  = null;
+    this.filter  = null;
+    this.reverb  = null;
+    this.Tone    = null;
   }
 }
 
