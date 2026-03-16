@@ -25,15 +25,12 @@ export interface LevelConfig {
 }
 
 export const SHUDDHA: readonly Swara[] = _SHUDDHA;
-export const ALL12:   readonly Swara[] = [
-  'Sa', 're', 'Re', 'ga', 'Ga', 'Ma', 'ma', 'Pa', 'dha', 'Dha', 'ni', 'Ni',
-];
 
 export const LEVEL_CONFIGS: LevelConfig[] = [
-  { level: 1, swaraPool: SHUDDHA, sequenceLen: 1, description: 'All 7 shuddha swaras' },
-  { level: 2, swaraPool: ALL12,   sequenceLen: 1, description: 'All 12 swaras (komal + tivra)' },
-  { level: 3, swaraPool: SHUDDHA, sequenceLen: 2, description: '2-swara sequences (7 shuddha)' },
-  { level: 4, swaraPool: SHUDDHA, sequenceLen: 3, description: '3-swara sequences (7 shuddha)' },
+  { level: 1, swaraPool: SHUDDHA, sequenceLen: 1, description: 'Single shuddha swara' },
+  { level: 2, swaraPool: SHUDDHA, sequenceLen: 2, description: '2-swara sequences' },
+  { level: 3, swaraPool: SHUDDHA, sequenceLen: 3, description: '3-swara sequences' },
+  { level: 4, swaraPool: SHUDDHA, sequenceLen: 4, description: '4-swara sequences' },
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -87,7 +84,7 @@ export interface GameSessionState {
   selectLevel:         (level: number) => void;
   setShruti:           (s: ShrutiNote) => void;
   startGame:           () => Promise<void>;
-  evaluateAnswer:      (chosen: Swara[]) => void;
+  evaluateAnswer:      (chosen: Swara[], extraAttempts?: number) => void;
   replayTone:          () => Promise<void>;
   hearOctave:          () => Promise<void>;
   stopOctave:          () => void;
@@ -225,13 +222,14 @@ export function useGameSession(): GameSessionState {
 
   // ── Evaluate an answer ────────────────────────────────────────────────────
 
-  const evaluateAnswer = useCallback((chosen: Swara[]) => {
+  const evaluateAnswer = useCallback((chosen: Swara[], extraAttempts = 0) => {
     const prev = roundRef.current;
     if (!prev) return;
 
-    const currentAttempts = prev.attempts + 1;
+    const currentAttempts = prev.attempts + 1 + extraAttempts;
     const correct         = arraysEqual(chosen, prev.targetSwaras);
-    const isFirstAttempt  = prev.attempts === 0;  // this is their first tap
+    // First attempt = no prior attempts in this round and no wrong slot fills
+    const isFirstAttempt  = prev.attempts === 0 && extraAttempts === 0;
 
     if (!correct) {
       // Wrong tap — increment attempts, note first-attempt failure

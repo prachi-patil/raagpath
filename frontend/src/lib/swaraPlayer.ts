@@ -1,10 +1,10 @@
 // ─── Swara Player Engine ──────────────────────────────────────────────────────
 // Synthesises single swara tones for the Swara Recognition Game.
-// Simulates a harmonium reed: custom partials + chorus (multiple reeds per note)
-// + lowpass filter + dry reverb.
+// Simulates a harmonium: 3 fatsawtooth oscillators (like 3 physical reeds per key,
+// each slightly detuned) → warm lowpass filter → very dry reverb.
 //
 // Signal chain:
-//   Synth (custom partials) → Chorus → Lowpass Filter (2000 Hz) → Reverb (dry) → Destination
+//   Synth (fatsawtooth × 3, 15¢ spread) → Lowpass Filter (1600 Hz) → Reverb (dry) → Destination
 //
 // IMPORTANT: ensureInitialised() MUST be called inside a user-gesture handler
 // (e.g. button click). AudioContext cannot be created before a gesture.
@@ -37,15 +37,9 @@ function swaraToHz(swara: Swara, shruti: ShrutiNote): number {
 const NOTE_DUR = '1n';     // 1 second per note (half-note at default 120 bpm)
 const NOTE_GAP_MS = 800;   // gap between notes in a sequence
 
-// Harmonium reed harmonic series: strong fundamental, overtones tapering off
-// faster than sawtooth — matches the mellower, woody quality of a real reed.
-// partials[i] = relative amplitude of the (i+1)th harmonic
-const HARMONIUM_PARTIALS = [1.0, 0.6, 0.4, 0.25, 0.18, 0.12, 0.08, 0.05];
-
 export class SwaraPlayerEngine {
   private Tone:   typeof import('tone') | null   = null;
   private synth:  import('tone').Synth | null    = null;
-  private chorus: import('tone').Chorus | null   = null;
   private filter: import('tone').Filter | null   = null;
   private reverb: import('tone').Reverb | null   = null;
   private _playing = false;
@@ -67,31 +61,28 @@ export class SwaraPlayerEngine {
 
     if (!this.filter) {
       // Lowpass rolls off harsh upper harmonics while keeping warmth
-      this.filter = new Tone.Filter({ frequency: 2000, type: 'lowpass', rolloff: -12 });
+      this.filter = new Tone.Filter({ frequency: 1600, type: 'lowpass', rolloff: -12 });
       this.filter.connect(this.reverb);
     }
 
-    if (!this.chorus) {
-      // Harmoniums have 2–3 slightly detuned reeds per note — chorus recreates this
-      this.chorus = new Tone.Chorus({ frequency: 2.5, delayTime: 2, depth: 0.25, wet: 0.45 });
-      this.chorus.start();
-      this.chorus.connect(this.filter);
-    }
-
     if (!this.synth) {
+      // fatsawtooth runs 3 actual oscillators, each detuned by 15¢ spread —
+      // physically equivalent to a harmonium's 3 reeds per key.
+      // This produces natural beating/chorus without any digital chorus effect.
       this.synth = new Tone.Synth({
         oscillator: {
-          type: 'custom' as const,
-          partials: HARMONIUM_PARTIALS,         // reed-specific harmonic series
+          type:   'fatsawtooth' as const,
+          count:  3,    // 3 reeds per key
+          spread: 15,   // 15 cents total spread between reeds
         },
         envelope: {
-          attack:  0.04,   // reed takes a moment to speak
-          decay:   0.05,   // quick settle into steady tone
-          sustain: 0.90,   // held steady while bellows push air
-          release: 0.25,   // stops promptly when key released
+          attack:  0.05,   // reed takes a moment to speak
+          decay:   0.08,   // quick settle into steady tone
+          sustain: 0.92,   // held steady while bellows push air
+          release: 0.35,   // stops promptly when key released
         },
-        volume: -6,
-      }).connect(this.chorus);
+        volume: -10,
+      }).connect(this.filter);
     }
   }
 
@@ -154,11 +145,9 @@ export class SwaraPlayerEngine {
   dispose(): void {
     this.stopPlayback();
     try { this.synth?.dispose(); }   catch { /* already disposed */ }
-    try { this.chorus?.dispose(); }  catch { /* already disposed */ }
     try { this.filter?.dispose(); }  catch { /* already disposed */ }
     try { this.reverb?.dispose(); }  catch { /* already disposed */ }
     this.synth   = null;
-    this.chorus  = null;
     this.filter  = null;
     this.reverb  = null;
     this.Tone    = null;

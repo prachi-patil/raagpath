@@ -211,12 +211,14 @@ export default function GamePage() {
       {/* Answer UI */}
       {isMultiSwara ? (
         <SlotFillUI
+          targetSwaras={game.round?.targetSwaras ?? []}
           swaraPool={levelConfig.swaraPool}
           sequenceLen={levelConfig.sequenceLen}
           disabled={buttonsDisabled}
-          onComplete={answer => handleAnswer(answer)}
-          targetSwaras={game.phase === 'round_result' ? (game.round?.targetSwaras ?? null) : null}
-          isCorrect={game.phase === 'round_result' ? true : null}
+          roundKey={game.round?.roundNumber ?? 0}
+          onComplete={(wrongAttempts) => {
+            if (game.round) game.evaluateAnswer(game.round.targetSwaras, wrongAttempts);
+          }}
         />
       ) : (
         <SwaraButtonGrid
