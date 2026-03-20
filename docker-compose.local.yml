@@ -1,0 +1,40 @@
+# ═══════════════════════════════════════════════════════════════════
+#  RaagPath — Local Development Compose
+#
+#  Runs only PostgreSQL locally so you can develop with hot-reload.
+#  Frontend and backend run separately on the host machine.
+#
+#  Quick start:
+#    1. docker compose -f docker-compose.local.yml up -d
+#    2. cd backend && ./gradlew bootRun --args='--spring.profiles.active=local'
+#    3. cd frontend && npm run dev
+#
+#  App is then accessible at:
+#    Frontend (Next.js dev)  →  http://localhost:3000
+#    Backend  (Spring Boot)  →  http://localhost:8080
+#    PostgreSQL               →  localhost:5432
+# ═══════════════════════════════════════════════════════════════════
+
+services:
+
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: raagpath-local-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       raagpath_local
+      POSTGRES_USER:     raagpath
+      POSTGRES_PASSWORD: localdev
+    ports:
+      - "5432:5432"
+    volumes:
+      - local_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raagpath -d raagpath_local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  local_pg_data:

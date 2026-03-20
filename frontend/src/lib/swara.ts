@@ -7,8 +7,16 @@ export const SWARAS = [
 ] as const;
 export type Swara = (typeof SWARAS)[number];
 
-// Natural (shuddha) swaras only — used for octave reference playback
+// Natural (shuddha) swaras only — Sa Re Ga Ma Pa Dha Ni (7 notes)
 export const SHUDDHA: readonly Swara[] = ['Sa', 'Re', 'Ga', 'Ma', 'Pa', 'Dha', 'Ni'];
+
+// Shuddha + all komal swaras (re ga dha ni) — 11 notes, no tivra Ma
+export const SHUDDHA_AND_KOMAL: readonly Swara[] = [
+  'Sa', 're', 'Re', 'ga', 'Ga', 'Ma', 'Pa', 'dha', 'Dha', 'ni', 'Ni',
+];
+
+// Full chromatic scale — all 12 semitones including tivra Ma (ma)
+export const ALL12: readonly Swara[] = [...SWARAS];
 
 // ─── Shruti (tonic) definitions ───────────────────────────────────────────────
 export const SHRUTI_NOTES = [

@@ -41,7 +41,7 @@ public class PlayerService {
 
         // Best score per level (0 if not played / not passed)
         Map<String, Integer> levelBestScores = new HashMap<>();
-        for (int lvl = 1; lvl <= 4; lvl++) {
+        for (int lvl = 1; lvl <= 6; lvl++) {
             levelBestScores.put(String.valueOf(lvl), 0);
         }
         gameSessionRepository.findBestScoresByPlayer(player.getId())

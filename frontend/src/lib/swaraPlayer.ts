@@ -9,7 +9,7 @@
 // IMPORTANT: ensureInitialised() MUST be called inside a user-gesture handler
 // (e.g. button click). AudioContext cannot be created before a gesture.
 
-import { SWARAS, SHUDDHA, type Swara, type ShrutiNote } from './swara';
+import { SWARAS, type Swara, type ShrutiNote } from './swara';
 
 // MIDI for each shruti at octave 3 (mirrors swara.ts SHRUTI_MIDI)
 const SHRUTI_MIDI: Record<ShrutiNote, number> = {
@@ -134,12 +134,13 @@ export class SwaraPlayerEngine {
   }
 
   /**
-   * Play the 7 shuddha swaras in ascending order — reference octave.
-   * Plays Sa Re Ga Ma Pa Dha Ni (natural notes only, no komal/tivra).
-   * Answer buttons should be disabled while this runs.
+   * Play all swaras in `pool` in ascending pitch order — level reference.
+   * Caller passes the current level's swaraPool so levels 5/6 include
+   * komal/tivra swaras in the reference. Answer buttons should be disabled.
    */
-  async playOctave(shruti: ShrutiNote): Promise<void> {
-    return this.playSequence(SHUDDHA, shruti);
+  async playOctave(pool: readonly Swara[], shruti: ShrutiNote): Promise<void> {
+    const sorted = [...pool].sort((a, b) => SWARA_SEMITONE[a] - SWARA_SEMITONE[b]);
+    return this.playSequence(sorted, shruti);
   }
 
   /** Stop any currently playing sequence immediately. */

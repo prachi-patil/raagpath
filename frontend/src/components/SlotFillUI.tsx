@@ -13,16 +13,17 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import type { Swara } from '@/lib/swara';
 
 interface Props {
-  targetSwaras: readonly Swara[];   // always provided; used for per-slot checking
-  swaraPool:    readonly Swara[];
-  sequenceLen:  number;
-  disabled:     boolean;
-  roundKey:     number;             // increment each new round to reset state
-  onComplete:   (wrongAttempts: number) => void;
+  targetSwaras:    readonly Swara[];  // always provided; used for per-slot checking
+  swaraPool:       readonly Swara[];
+  sequenceLen:     number;
+  disabled:        boolean;
+  roundKey:        number;            // increment each new round to reset state
+  onWrongAttempt:  () => void;        // called for each wrong slot tap (hook tracks count)
+  onComplete:      () => void;        // called when all slots correctly locked
 }
 
 export function SlotFillUI({
-  targetSwaras, swaraPool, sequenceLen, disabled, roundKey, onComplete,
+  targetSwaras, swaraPool, sequenceLen, disabled, roundKey, onWrongAttempt, onComplete,
 }: Props) {
   const [lockedSlots, setLockedSlots] = useState<(Swara | null)[]>(
     () => Array(sequenceLen).fill(null)
@@ -30,9 +31,8 @@ export function SlotFillUI({
   const [errorSlot, setErrorSlot] = useState<number | null>(null);
 
   // Refs — stay current inside event handlers without stale closures
-  const lockedRef  = useRef<(Swara | null)[]>(Array(sequenceLen).fill(null));
-  const wrongRef   = useRef(0);
-  const doneRef    = useRef(false);
+  const lockedRef = useRef<(Swara | null)[]>(Array(sequenceLen).fill(null));
+  const doneRef   = useRef(false);
 
   // Reset when a new round starts
   useEffect(() => {
@@ -40,8 +40,7 @@ export function SlotFillUI({
     lockedRef.current = empty;
     setLockedSlots(empty);
     setErrorSlot(null);
-    wrongRef.current = 0;
-    doneRef.current  = false;
+    doneRef.current = false;
   }, [roundKey, sequenceLen]);
 
   const handleTap = useCallback((swara: Swara) => {
@@ -59,15 +58,15 @@ export function SlotFillUI({
 
       if (next.every(s => s !== null)) {
         doneRef.current = true;
-        setTimeout(() => onComplete(wrongRef.current), 0);
+        setTimeout(() => onComplete(), 0);
       }
     } else {
-      // ── Wrong slot ────────────────────────────────────────────────────────
-      wrongRef.current += 1;
+      // ── Wrong slot — notify hook so it can track attempts ─────────────────
+      onWrongAttempt();
       setErrorSlot(idx);
       setTimeout(() => setErrorSlot(null), 350);
     }
-  }, [disabled, targetSwaras, onComplete]);
+  }, [disabled, targetSwaras, onWrongAttempt, onComplete]);
 
   const nextEmptyIdx = lockedSlots.findIndex(s => s === null);
   const allLocked    = nextEmptyIdx === -1;

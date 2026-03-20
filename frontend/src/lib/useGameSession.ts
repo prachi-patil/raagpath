@@ -11,7 +11,12 @@
 // Progression: 5 consecutive firstAttemptCorrect answers required to pass
 
 import { useCallback, useRef, useState } from 'react';
-import { SHUDDHA as _SHUDDHA, type Swara, type ShrutiNote } from './swara';
+import {
+  SHUDDHA          as _SHUDDHA,
+  SHUDDHA_AND_KOMAL as _SHUDDHA_AND_KOMAL,
+  ALL12            as _ALL12,
+  type Swara, type ShrutiNote,
+} from './swara';
 import { SwaraPlayerEngine } from './swaraPlayer';
 import { apiFetch } from './api';
 
@@ -24,13 +29,17 @@ export interface LevelConfig {
   description: string;
 }
 
-export const SHUDDHA: readonly Swara[] = _SHUDDHA;
+export const SHUDDHA:           readonly Swara[] = _SHUDDHA;
+export const SHUDDHA_AND_KOMAL: readonly Swara[] = _SHUDDHA_AND_KOMAL;
+export const ALL12:             readonly Swara[] = _ALL12;
 
 export const LEVEL_CONFIGS: LevelConfig[] = [
-  { level: 1, swaraPool: SHUDDHA, sequenceLen: 1, description: 'Single shuddha swara' },
-  { level: 2, swaraPool: SHUDDHA, sequenceLen: 2, description: '2-swara sequences' },
-  { level: 3, swaraPool: SHUDDHA, sequenceLen: 3, description: '3-swara sequences' },
-  { level: 4, swaraPool: SHUDDHA, sequenceLen: 4, description: '4-swara sequences' },
+  { level: 1, swaraPool: SHUDDHA,           sequenceLen: 1, description: 'Single shuddha swara' },
+  { level: 2, swaraPool: SHUDDHA,           sequenceLen: 2, description: '2-swara sequences' },
+  { level: 3, swaraPool: SHUDDHA,           sequenceLen: 3, description: '3-swara sequences' },
+  { level: 4, swaraPool: SHUDDHA,           sequenceLen: 4, description: '4-swara sequences' },
+  { level: 5, swaraPool: SHUDDHA_AND_KOMAL, sequenceLen: 1, description: 'Shuddha + komal swaras (11 notes)' },
+  { level: 6, swaraPool: ALL12,             sequenceLen: 1, description: 'All 12 swaras incl. tivra Ma' },
 ];
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -84,7 +93,8 @@ export interface GameSessionState {
   selectLevel:         (level: number) => void;
   setShruti:           (s: ShrutiNote) => void;
   startGame:           () => Promise<void>;
-  evaluateAnswer:      (chosen: Swara[], extraAttempts?: number) => void;
+  evaluateAnswer:      (chosen: Swara[]) => void;
+  registerWrongAttempt: () => void;   // called by SlotFillUI on each wrong slot tap
   replayTone:          () => Promise<void>;
   hearOctave:          () => Promise<void>;
   stopOctave:          () => void;
@@ -144,6 +154,8 @@ export function useGameSession(): GameSessionState {
   const roundRef         = useRef<RoundState | null>(null);  // mirrors round state
   const selectedLevelRef = useRef(1);
   const shrutiRef        = useRef<ShrutiNote>('C');
+  // Tracks last question to prevent back-to-back duplicates
+  const lastTargetRef    = useRef<Swara[]>([]);
 
   // Helper: update both round state and ref atomically
   const setRoundSync = (r: RoundState | null) => {
@@ -166,10 +178,18 @@ export function useGameSession(): GameSessionState {
   // ── Internal: play a new round ────────────────────────────────────────────
 
   const playNextRound = useCallback(async () => {
-    const level   = selectedLevelRef.current;
-    const sh      = shrutiRef.current;
-    const config  = LEVEL_CONFIGS[level - 1];
-    const targets = pickSequence(config.swaraPool, config.sequenceLen) as Swara[];
+    const level  = selectedLevelRef.current;
+    const sh     = shrutiRef.current;
+    const config = LEVEL_CONFIGS[level - 1];
+
+    // Pick a sequence that differs from the last one (prevents back-to-back duplicates)
+    let targets: Swara[];
+    let retries = 0;
+    do {
+      targets = pickSequence(config.swaraPool, config.sequenceLen) as Swara[];
+      retries++;
+    } while (retries < 5 && arraysEqual(targets as string[], lastTargetRef.current as string[]));
+    lastTargetRef.current = targets;
 
     roundNumRef.current += 1;
 
@@ -211,6 +231,7 @@ export function useGameSession(): GameSessionState {
     completedRef.current  = [];
     scoreRef.current      = 0;
     roundNumRef.current   = 0;
+    lastTargetRef.current = [];         // reset duplicate-prevention for new session
 
     setStreak(0);
     setCompletedRounds([]);
@@ -221,19 +242,36 @@ export function useGameSession(): GameSessionState {
     await playNextRound();
   }, [playNextRound]);
 
-  // ── Evaluate an answer ────────────────────────────────────────────────────
+  // ── Register a wrong slot attempt (multi-swara levels) ───────────────────
+  // Called by SlotFillUI for each incorrect slot tap. Updates the round's
+  // attempt counter and marks firstAttemptWrong so scoring is accurate.
 
-  const evaluateAnswer = useCallback((chosen: Swara[], extraAttempts = 0) => {
+  const registerWrongAttempt = useCallback(() => {
+    const prev = roundRef.current;
+    if (!prev || prev.correct !== null) return; // guard: only during active round
+    setRoundSync({
+      ...prev,
+      attempts:          prev.attempts + 1,
+      firstAttemptWrong: true,
+    });
+  }, []);
+
+  // ── Evaluate an answer ────────────────────────────────────────────────────
+  // For multi-swara levels: called once when all slots are correctly locked.
+  // prev.attempts already reflects wrong slot fills (via registerWrongAttempt).
+  // For single-swara levels: called on each tap, may be wrong (retries stay
+  // in awaiting_answer) or correct (advances to round_result).
+
+  const evaluateAnswer = useCallback((chosen: Swara[]) => {
     const prev = roundRef.current;
     if (!prev) return;
 
-    const currentAttempts = prev.attempts + 1 + extraAttempts;
+    const currentAttempts = prev.attempts + 1;
     const correct         = arraysEqual(chosen, prev.targetSwaras);
-    // First attempt = no prior attempts in this round and no wrong slot fills
-    const isFirstAttempt  = prev.attempts === 0 && extraAttempts === 0;
+    const isFirstAttempt  = prev.attempts === 0; // true only if zero prior wrong fills/taps
 
     if (!correct) {
-      // Wrong tap — increment attempts, note first-attempt failure
+      // Wrong tap (single-swara flow) — increment attempts, stay in awaiting_answer
       setRoundSync({
         ...prev,
         attempts:          currentAttempts,
@@ -302,14 +340,15 @@ export function useGameSession(): GameSessionState {
     setPhase('awaiting_answer');
   }, []);
 
-  // ── Reference octave ─────────────────────────────────────────────────────
+  // ── Reference octave — plays the current level's full pool ascending ──────
 
   const hearOctave = useCallback(async () => {
     const engine = getEngine();
     if (engine.playing) return;
     setOctavePlaying(true);
     try {
-      await engine.playOctave(shrutiRef.current);
+      const config = LEVEL_CONFIGS[selectedLevelRef.current - 1];
+      await engine.playOctave(config.swaraPool, shrutiRef.current);
     } finally {
       setOctavePlaying(false);
     }
@@ -350,7 +389,7 @@ export function useGameSession(): GameSessionState {
 
       setResult({ ...resp, sessionId: resp.sessionId });
 
-      // Refresh player profile in localStorage (non-critical)
+      // Refresh player profile in localStorage so setup screen shows updated best scores
       try {
         const profile = await apiFetch<Record<string, unknown>>('/api/players/join', {
           method: 'POST', body: JSON.stringify({ username }),
@@ -370,11 +409,12 @@ export function useGameSession(): GameSessionState {
 
   const resetToSetup = useCallback(() => {
     getEngine().stopPlayback();
-    roundRef.current     = null;
-    streakRef.current    = 0;
-    completedRef.current = [];
-    scoreRef.current     = 0;
-    roundNumRef.current  = 0;
+    roundRef.current      = null;
+    streakRef.current     = 0;
+    completedRef.current  = [];
+    scoreRef.current      = 0;
+    roundNumRef.current   = 0;
+    lastTargetRef.current = [];  // reset duplicate-prevention
 
     setPhase('setup');
     setRound(null);
@@ -390,6 +430,7 @@ export function useGameSession(): GameSessionState {
     firstAttemptStreak, totalRoundsPlayed, sessionScore,
     octavePlaying, submitting, result,
     selectLevel, setShruti, startGame, evaluateAnswer,
+    registerWrongAttempt,
     replayTone, hearOctave, stopOctave, submitSession, resetToSetup,
   };
 }

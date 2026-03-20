@@ -81,6 +81,16 @@ export default function GamePage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [game.phase]);
 
+  // ── Refresh playerProfile state when session_done (shows updated best scores) ──
+  useEffect(() => {
+    if (game.phase === 'session_done') {
+      const saved = localStorage.getItem('rp_player');
+      if (saved) {
+        try { setPlayerProfile(JSON.parse(saved)); } catch { /* ignore */ }
+      }
+    }
+  }, [game.phase]);
+
   // ── Show correct highlight in round_result ────────────────────────────────
   useEffect(() => {
     if (game.phase === 'round_result' && game.round?.targetSwaras) {
@@ -216,8 +226,9 @@ export default function GamePage() {
           sequenceLen={levelConfig.sequenceLen}
           disabled={buttonsDisabled}
           roundKey={game.round?.roundNumber ?? 0}
-          onComplete={(wrongAttempts) => {
-            if (game.round) game.evaluateAnswer(game.round.targetSwaras, wrongAttempts);
+          onWrongAttempt={game.registerWrongAttempt}
+          onComplete={() => {
+            if (game.round) game.evaluateAnswer(game.round.targetSwaras);
           }}
         />
       ) : (

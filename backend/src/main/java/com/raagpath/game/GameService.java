@@ -33,7 +33,9 @@ public class GameService {
         int     totalScore = computeTotalScore(req.rounds());
         boolean passed     = hasPassingStreak(req.rounds());
 
-        // ── isNewBest — check BEFORE saving ───────────────────────────────────
+        // ── isNewBest — check BEFORE saving (only for passed sessions) ──────────
+        // Best scores are tracked for passed sessions only; a non-passing retry
+        // does not count as a new personal best even if the raw score is higher.
         boolean isNewBest = false;
         if (passed) {
             int previousBest = gameSessionRepository
